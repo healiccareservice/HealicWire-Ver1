@@ -18,6 +18,8 @@ import ScientificEventPage from "./components/ScientificEventPage";
 import PortalPage from "./components/PortalPage";
 import EditorialsPage from "./components/EditorialsPage";
 import WhatWeDoSlider from "./components/WhatWeDoSlider";
+import Login from "./components/Login";
+import { supabase } from "./lib/supabase";
 import { Article, HospitalAlert, ImpactSeverity } from "./types";
 
 interface ErrorBoundaryProps { children: React.ReactNode; }
@@ -43,6 +45,21 @@ export default function App() {
   const [showAdmin, setShowAdmin] = useState(() => {
     return window.location.pathname.startsWith("/contrl-panl") || window.location.pathname.startsWith("/admin");
   });
+  const [session, setSession] = useState<any>(null);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -866,9 +883,13 @@ export default function App() {
 
       {/* ADMIN CMS INTERFACE DIALOG OVERLAY */}
       {showAdmin && (
-        <AdminCMS
-          onClose={closeAdmin}
-        />
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm overflow-y-auto">
+          {!session ? (
+            <Login onLogin={() => {}} />
+          ) : (
+            <AdminCMS onClose={closeAdmin} />
+          )}
+        </div>
       )}
 
       {/* POLICY/MODAL PORTALS */}

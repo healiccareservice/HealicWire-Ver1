@@ -1,3 +1,4 @@
+import { authFetch } from '../lib/api';
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -146,7 +147,7 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
 
   const handleDeletePortalPage = (articleId: string) => {
     if (!confirm("Are you sure you want to delete this portal page?")) return;
-    fetch(`/api/admin/articles/${articleId}`, { method: "DELETE" })
+    authFetch(`/api/admin/articles/${articleId}`, { method: "DELETE" })
       .then(res => res.json())
       .then(() => fetchData())
       .catch(err => console.error(err));
@@ -171,7 +172,7 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
   const [copiedImgId, setCopiedImgId] = useState<string | null>(null);
 
   const fetchUploadedImages = () => {
-    fetch("/api/admin/uploaded-images")
+    authFetch("/api/admin/uploaded-images")
       .then(res => res.json())
       .then(data => setUploadedImagesList(data || []))
       .catch(err => console.error(err));
@@ -192,7 +193,7 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
       const dataUrl = event.target?.result as string;
       const fileSize = (file.size / 1024).toFixed(1) + " KB";
 
-      fetch("/api/admin/uploaded-images", {
+      authFetch("/api/admin/uploaded-images", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -219,7 +220,7 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
 
   const handleDeleteGcsImage = (imgId: string) => {
     if (!confirm("Are you sure you want to delete this image from Google Cloud Storage?")) return;
-    fetch(`/api/admin/uploaded-images/${imgId}`, { method: "DELETE" })
+    authFetch(`/api/admin/uploaded-images/${imgId}`, { method: "DELETE" })
       .then(res => res.json())
       .then(() => fetchUploadedImages())
       .catch(err => console.error(err));
@@ -266,7 +267,7 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
   const [submittingEvent, setSubmittingEvent] = useState(false);
 
   const fetchCreatedEventsList = () => {
-    fetch("/api/scientific-events")
+    authFetch("/api/scientific-events")
       .then(res => res.json())
       .then(data => setCreatedEventsList(data || []))
       .catch(err => console.error(err));
@@ -347,7 +348,7 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
 
   const handleDeleteEvent = (eventId: string) => {
     if (!confirm("Are you sure you want to delete this Scientific Event page?")) return;
-    fetch(`/api/scientific-events/${eventId}`, { method: "DELETE" })
+    authFetch(`/api/scientific-events/${eventId}`, { method: "DELETE" })
       .then(res => res.json())
       .then(() => {
         fetchCreatedEventsList();
@@ -379,7 +380,7 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
     const endpoint = isEditMode ? `/api/scientific-events/${editingEventId}` : "/api/scientific-events";
     const method = isEditMode ? "PUT" : "POST";
 
-    fetch(endpoint, {
+    authFetch(endpoint, {
       method,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(eventPayload)
@@ -433,7 +434,7 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
   const [generateWeeklySuccess, setGenerateWeeklySuccess] = useState<string | null>(null);
 
   const fetchGeneratedWeeks = () => {
-    fetch("/api/admin/generated-weeks")
+    authFetch("/api/admin/generated-weeks")
       .then(res => res.json())
       .then(data => setGeneratedWeeksMap(data || {}))
       .catch(err => console.error(err));
@@ -477,7 +478,7 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
     setGeneratingWeekly(true);
     setGenerateWeeklySuccess(null);
 
-    fetch("/api/admin/generate-weekly-batch", {
+    authFetch("/api/admin/generate-weekly-batch", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ selectedWeek, selectedSections })
@@ -502,7 +503,7 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
 
   const fetchData = () => {
     setLoading(true);
-    fetch("/api/articles?status=all")
+    authFetch("/api/articles?status=all")
       .then(res => res.json())
       .then(data => {
         setArticles(data);
@@ -510,12 +511,12 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
       })
       .catch(err => console.error(err));
 
-    fetch("/api/admin/corrections")
+    authFetch("/api/admin/corrections")
       .then(res => res.json())
       .then(data => setCorrections(data))
       .catch(err => console.error(err));
 
-    fetch("/api/admin/event-assets")
+    authFetch("/api/admin/event-assets")
       .then(res => res.json())
       .then(data => setEventAssets(data))
       .catch(err => console.error(err));
@@ -663,7 +664,7 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
     setSavingAssets(true);
     setManageSuccess(null);
 
-    fetch("/api/admin/event-assets", {
+    authFetch("/api/admin/event-assets", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -696,7 +697,7 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
     e.preventDefault();
     if (!editorialForm.headline.trim() || !editorialForm.summary30s.trim()) return;
 
-    fetch("/api/admin/articles", {
+    authFetch("/api/admin/articles", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -738,7 +739,7 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
     setAiGeneratingEditorial(true);
     setEditorialSuccess(null);
 
-    fetch("/api/admin/ingest", {
+    authFetch("/api/admin/ingest", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ topic: editorialForm.headline })
@@ -786,7 +787,7 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
     setIngesting(true);
     setIngestSuccess(null);
 
-    fetch("/api/admin/ingest", {
+    authFetch("/api/admin/ingest", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ topic: ingestTopic })
@@ -852,7 +853,7 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
       status: "published"
     };
 
-    fetch(endpoint, {
+    authFetch(endpoint, {
       method,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(articlePayload)
@@ -870,7 +871,7 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
   };
 
   const handlePublish = (articleId: string) => {
-    fetch(`/api/admin/articles/${articleId}`, {
+    authFetch(`/api/admin/articles/${articleId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: "published" })
@@ -882,7 +883,7 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
 
   const handleDelete = (articleId: string) => {
     if (!confirm("Are you sure you want to delete this content?")) return;
-    fetch(`/api/admin/articles/${articleId}`, { method: "DELETE" })
+    authFetch(`/api/admin/articles/${articleId}`, { method: "DELETE" })
       .then(res => res.json())
       .then(() => fetchData())
       .catch(err => console.error(err));
@@ -891,7 +892,7 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
   const handleSaveEdit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingArticle) return;
-    fetch(`/api/admin/articles/${editingArticle.id}`, {
+    authFetch(`/api/admin/articles/${editingArticle.id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(editingArticle)

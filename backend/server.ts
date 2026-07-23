@@ -9,6 +9,7 @@ import dotenv from "dotenv";
 import path from "path";
 import fs from "fs";
 import { GoogleGenAI, Type } from "@google/genai";
+import { createClient } from "@supabase/supabase-js";
 import { initialArticles, initialLivingGuidelines, initialHospitalAlerts } from "./src/initial_db";
 import { Article, LivingGuideline, HospitalAlert, EvidenceLevel, Region, ImpactSeverity, MCQ, Flashcard, VivaQuestion, ScientificEvent } from "./src/types";
 import { initialEvents } from "./src/initial_events";
@@ -161,6 +162,32 @@ async function startServer() {
 
   // Initialize DB
   const db = loadDb();
+
+  // Initialize Supabase Admin Client
+  const supabaseUrl = process.env.SUPABASE_URL || "";
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+  const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+
+  // Auth Middleware for privileged routes
+  const requireAuth = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return res.status(401).json({ error: "Missing Authorization header" });
+    }
+
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+
+    if (error || !user) {
+      return res.status(401).json({ error: "Invalid or expired token" });
+    }
+    
+    (req as any).user = user;
+    next();
+  };
+
+  // Protect all admin routes
+  app.use("/api/admin", requireAuth);
 
   // --- API ROUTES ---
 

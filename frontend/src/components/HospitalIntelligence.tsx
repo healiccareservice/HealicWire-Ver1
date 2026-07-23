@@ -6,6 +6,7 @@
 import React, { useState, useEffect } from "react";
 import { ShieldAlert, AlertTriangle, Info, BellRing, Filter, Clock, MapPin, CheckCircle, Plus, Send } from "lucide-react";
 import { HospitalAlert, ImpactSeverity } from "../types";
+import { authFetch } from "../lib/api";
 
 export default function HospitalIntelligence() {
   const [alerts, setAlerts] = useState<HospitalAlert[]>([]);
@@ -53,7 +54,7 @@ export default function HospitalIntelligence() {
       source: formSource || "Internal Administration"
     };
 
-    fetch("/api/admin/hospital-alerts", {
+    authFetch("/api/admin/hospital-alerts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
