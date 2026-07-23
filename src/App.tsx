@@ -1,0 +1,943 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { Component, useState, useEffect } from "react";
+import { Sparkles, Activity, ShieldAlert, BookOpen, Search, User, SlidersHorizontal, Eye, Star, Heart, FileText, CheckCircle, Mail, HelpCircle, Landmark, Bell, AlertTriangle, UserCheck, ChevronRight, ChevronDown } from "lucide-react";
+import HealicLogo from "./components/HealicLogo";
+import Header from "./components/Header";
+import ArticleCard from "./components/ArticleCard";
+import ArticleDetail from "./components/ArticleDetail";
+import LivingGuidelines from "./components/LivingGuidelines";
+import HospitalIntelligence from "./components/HospitalIntelligence";
+import AdminCMS from "./components/AdminCMS";
+import ProposalPortal from "./components/ProposalPortal";
+import ScientificEvents from "./components/ScientificEvents";
+import ScientificEventPage from "./components/ScientificEventPage";
+import PortalPage from "./components/PortalPage";
+import EditorialsPage from "./components/EditorialsPage";
+import WhatWeDoSlider from "./components/WhatWeDoSlider";
+import { Article, HospitalAlert, ImpactSeverity } from "./types";
+
+interface ErrorBoundaryProps { children: React.ReactNode; }
+interface ErrorBoundaryState { hasError: boolean; error: any; }
+
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  declare state: ErrorBoundaryState;
+  declare props: ErrorBoundaryProps;
+
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error: any) { return { hasError: true, error }; }
+  render() { 
+    if (this.state.hasError) return <div style={{padding: '50px', background: 'red', color: 'white', zIndex: 9999, position: 'fixed', top: 0, left: 0, right: 0, bottom: 0}}><h1>ERROR!</h1><pre>{this.state.error?.stack || this.state.error?.toString()}</pre></div>; 
+    return this.props.children; 
+  }
+}
+
+export default function App() {
+  const [currentPath, setCurrentPath] = useState(window.location.pathname);
+  const [showAdmin, setShowAdmin] = useState(() => {
+    return window.location.pathname.startsWith("/contrl-panl") || window.location.pathname.startsWith("/admin");
+  });
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const path = window.location.pathname;
+      setCurrentPath(path);
+      if (path.startsWith("/contrl-panl") || path.startsWith("/admin")) {
+        setShowAdmin(true);
+      } else {
+        setShowAdmin(false);
+      }
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  const openAdmin = () => {
+    window.history.pushState({}, "", "/contrl-panl");
+    setCurrentPath("/contrl-panl");
+    setShowAdmin(true);
+  };
+
+  const closeAdmin = () => {
+    window.history.pushState({}, "", "/");
+    setCurrentPath("/");
+    setShowAdmin(false);
+    fetchArticles();
+  };
+
+  let currentTab = "news";
+  let eventPageSlug: string | null = null;
+  let portalPageSlug: string | null = null;
+  let portalPageSection: string | null = null;
+
+  if (currentPath.startsWith("/treatmentupdate")) {
+    currentTab = "treatment-updates";
+    if (currentPath.startsWith("/treatmentupdate/")) {
+      const sub = currentPath.replace("/treatmentupdate/", "").split("/")[0].trim();
+      if (sub) { portalPageSection = "treatment-updates"; portalPageSlug = sub; }
+    }
+  } else if (currentPath.startsWith("/scientificevents")) {
+    currentTab = "events";
+    if (currentPath.startsWith("/scientificevents/")) {
+      const sub = currentPath.replace("/scientificevents/", "").split("/")[0].trim();
+      if (sub) eventPageSlug = sub;
+    }
+  } else if (currentPath.startsWith("/editorials")) {
+    currentTab = "editorials";
+  } else if (currentPath.startsWith("/guidelines")) {
+    currentTab = "guidelines";
+    if (currentPath.startsWith("/guidelines/")) {
+      const sub = currentPath.replace("/guidelines/", "").split("/")[0].trim();
+      if (sub) { portalPageSection = "guidelines"; portalPageSlug = sub; }
+    }
+  } else if (currentPath.startsWith("/pharmadrugs")) {
+    currentTab = "pharma-drugs";
+    if (currentPath.startsWith("/pharmadrugs/")) {
+      const sub = currentPath.replace("/pharmadrugs/", "").split("/")[0].trim();
+      if (sub) { portalPageSection = "pharma-drugs"; portalPageSlug = sub; }
+    }
+  } else if (currentPath.startsWith("/alerts")) {
+    currentTab = "alerts";
+    if (currentPath.startsWith("/alerts/")) {
+      const sub = currentPath.replace("/alerts/", "").split("/")[0].trim();
+      if (sub) { portalPageSection = "alerts"; portalPageSlug = sub; }
+    }
+  } else if (currentPath.startsWith("/pages/")) {
+    currentTab = "pages";
+    const sub = currentPath.replace("/pages/", "").split("/")[0].trim();
+    if (sub) { portalPageSection = "pages"; portalPageSlug = sub; }
+  } else if (currentPath.startsWith("/proposal")) {
+    currentTab = "proposal";
+  }
+
+  const setCurrentTab = (tab: string) => {
+    let newPath = "/";
+    if (tab === "treatment-updates") newPath = "/treatmentupdate";
+    else if (tab === "events") newPath = "/scientificevents";
+    else if (tab === "editorials") newPath = "/editorials";
+    else if (tab === "guidelines") newPath = "/guidelines";
+    else if (tab === "pharma-drugs") newPath = "/pharmadrugs";
+    else if (tab === "alerts") newPath = "/alerts";
+    else if (tab === "proposal") newPath = "/proposal";
+    
+    window.history.pushState({}, "", newPath);
+    setCurrentPath(newPath);
+  };
+  const [searchQuery, setSearchQuery] = useState("");
+  const [viewMode, setViewMode] = useState<"comfortable" | "compact">("comfortable");
+  const [theme, setTheme] = useState<"light" | "dark">("light");
+
+  // Paginated News State (20 articles per page click)
+  const [visibleCount, setVisibleCount] = useState(20);
+
+  useEffect(() => {
+    setVisibleCount(20);
+  }, [searchQuery, currentPath]);
+
+  // Core data states
+  const [articles, setArticles] = useState<Article[]>([]);
+  const [alerts, setAlerts] = useState<HospitalAlert[]>([]);
+  const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
+
+  // Interface overlays
+  const [showPolicies, setShowPolicies] = useState<"about" | "editorial" | "disclaimer" | null>(null);
+
+  // Local persistence states
+  const [savedArticleIds, setSavedArticleIds] = useState<string[]>([]);
+
+  // Newsletter form
+  const [newsEmail, setNewsEmail] = useState("");
+  const [newsSpecialty, setNewsSpecialty] = useState("General Medicine");
+  const [newsFrequency, setNewsFrequency] = useState<"daily" | "weekly">("weekly");
+  const [newsSuccess, setNewsSuccess] = useState<string | null>(null);
+
+  // Load theme & saved articles on mount
+  useEffect(() => {
+    // Force Light theme as requested
+    setTheme("light");
+    document.documentElement.classList.remove("dark");
+    try {
+      localStorage.setItem("healic_theme", "light");
+    } catch (e) {
+      console.warn("localStorage full, couldn't save theme", e);
+    }
+
+    try {
+      const savedIds = localStorage.getItem("healic_saved_ids");
+      if (savedIds) {
+        setSavedArticleIds(JSON.parse(savedIds));
+      }
+    } catch (e) {
+      console.warn("localStorage read failed", e);
+    }
+
+    try {
+      const savedMode = localStorage.getItem("healic_view_mode") as "comfortable" | "compact";
+      if (savedMode) {
+        setViewMode(savedMode);
+      }
+    } catch (e) { console.warn("localStorage view mode read failed", e); }
+
+    fetchArticles();
+    fetchAlerts();
+  }, []);
+
+  const fetchArticles = () => {
+    fetch("/api/articles")
+      .then(res => res.json())
+      .then(data => setArticles(data))
+      .catch(err => console.error("Failed to fetch articles:", err));
+  };
+
+  const fetchAlerts = () => {
+    fetch("/api/hospital-alerts")
+      .then(res => res.json())
+      .then(data => setAlerts(data))
+      .catch(err => console.error("Failed to fetch alerts:", err));
+  };
+
+  const handleRefreshArticleDetail = () => {
+    if (!selectedArticle) return;
+    fetch(`/api/articles/${selectedArticle.id}`)
+      .then(res => res.json())
+      .then(data => {
+        setSelectedArticle(data);
+        // Refresh full feed
+        fetchArticles();
+      })
+      .catch(err => console.error(err));
+  };
+
+  const toggleTheme = () => {
+    const newTheme = theme === "light" ? "dark" : "light";
+    setTheme(newTheme);
+    localStorage.setItem("healic_theme", newTheme);
+    if (newTheme === "dark") {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+  };
+
+  const handleToggleSave = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    let newSaved = [...savedArticleIds];
+    if (newSaved.includes(id)) {
+      newSaved = newSaved.filter(savedId => savedId !== id);
+    } else {
+      newSaved.push(id);
+    }
+    setSavedArticleIds(newSaved);
+    localStorage.setItem("healic_saved_ids", JSON.stringify(newSaved));
+  };
+
+  const handleToggleViewMode = () => {
+    const newMode = viewMode === "comfortable" ? "compact" : "comfortable";
+    setViewMode(newMode);
+    localStorage.setItem("healic_view_mode", newMode);
+  };
+
+  // Newsletter signup submission
+  const handleNewsletterSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newsEmail) return;
+
+    fetch("/api/newsletter/subscribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: newsEmail, specialty: newsSpecialty, frequency: newsFrequency })
+    })
+      .then(res => res.json())
+      .then(data => {
+        setNewsSuccess(data.message || "Subscribed successfully!");
+        setNewsEmail("");
+        setTimeout(() => {
+          setNewsSuccess(null);
+        }, 3000);
+      })
+      .catch(err => console.error(err));
+  };
+
+  // Core filtering logic for search
+  let filteredArticles = articles.filter(a => 
+    a.sourceName !== "HealicWire Special Page Engine" && 
+    !(a as any).isPortalPage &&
+    !a.headline.startsWith("Scientific Events:") &&
+    !a.headline.startsWith("Treatment Update:")
+  );
+
+  // Advanced search prefixes (e.g. category:Clinical, region:india, saved:true)
+  const isQueryPrefix = searchQuery.trim().startsWith("category:");
+  const isRegionPrefix = searchQuery.trim().startsWith("region:");
+  
+  if (isQueryPrefix) {
+    const cat = searchQuery.split(":")[1].trim().toLowerCase();
+    filteredArticles = filteredArticles.filter(a => a.category.toLowerCase() === cat);
+  } else if (isRegionPrefix) {
+    const reg = searchQuery.split(":")[1].trim().toLowerCase();
+    filteredArticles = filteredArticles.filter(a => a.region.toLowerCase() === reg);
+  } else if (searchQuery.trim().toLowerCase() === "saved:true") {
+    filteredArticles = filteredArticles.filter(a => savedArticleIds.includes(a.id));
+  } else if (searchQuery.trim()) {
+    const q = searchQuery.toLowerCase();
+    filteredArticles = filteredArticles.filter(
+      a =>
+        a.headline.toLowerCase().includes(q) ||
+        a.subhead.toLowerCase().includes(q) ||
+        a.bodyAnalysis.toLowerCase().includes(q) ||
+        a.specialties.some(s => s.toLowerCase().includes(q))
+    );
+  }
+
+  // Find critical/urgent alert to show in Alert Strip
+  const criticalAlert = alerts.find(a => a.severity === ImpactSeverity.CRITICAL);
+
+  // Separate Lead story (newest Clinical/Research article) from grid
+  const leadStory = filteredArticles.length > 0 ? filteredArticles[0] : null;
+  const feedStories = leadStory ? filteredArticles.slice(1) : [];
+
+  return (
+    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-150 flex flex-col font-sans transition-colors duration-200 selection:bg-teal-700/10 selection:text-teal-900">
+      {/* Dynamic Sticky Header */}
+      <Header
+        currentTab={currentTab}
+        setCurrentTab={(tab) => {
+          setCurrentTab(tab);
+          setSelectedArticle(null);
+        }}
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        theme={theme}
+        toggleTheme={toggleTheme}
+        onOpenAdmin={openAdmin}
+        alertCount={alerts.filter(a => a.severity === ImpactSeverity.CRITICAL || a.severity === ImpactSeverity.URGENT).length}
+      />
+
+      {/* CRITICAL ALERTS TICKER BAR */}
+      {criticalAlert && (
+        <div className="bg-red-600 dark:bg-red-950 border-b border-red-700 dark:border-red-900 text-white py-1.5 px-3 sm:px-4">
+          <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 text-xs font-semibold">
+            <div className="flex items-center space-x-2 min-w-0 flex-1">
+              <ShieldAlert className="w-3.5 h-3.5 shrink-0 text-red-100 animate-pulse" />
+              <span className="font-mono uppercase tracking-wider text-[9px] bg-red-700 dark:bg-red-900 px-1.5 py-0.5 rounded font-bold shrink-0">
+                Critical Alert
+              </span>
+              <p className="text-red-50 dark:text-red-200 text-[11px] sm:text-xs truncate font-medium">
+                {criticalAlert.headline}
+              </p>
+            </div>
+            <button
+              onClick={() => setCurrentTab("alerts")}
+              className="px-2.5 py-0.5 rounded bg-white/15 hover:bg-white/25 text-white border border-white/25 text-[10px] font-mono shrink-0 uppercase tracking-wider font-bold transition-all"
+            >
+              Action Protocol
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* MAIN CONTENT PORT */}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+        {selectedArticle ? (
+          /* Render Detailed Article page */
+          <ArticleDetail
+            article={selectedArticle}
+            onBack={() => setSelectedArticle(null)}
+            isSaved={savedArticleIds.includes(selectedArticle.id)}
+            onToggleSave={handleToggleSave}
+            onRefreshArticle={handleRefreshArticleDetail}
+          />
+        ) : portalPageSlug && portalPageSection ? (
+          /* Render Generated Portal / Specialty Page */
+          <PortalPage 
+            section={portalPageSection} 
+            slug={portalPageSlug} 
+            onBack={() => setCurrentTab(portalPageSection === "pages" ? "news" : portalPageSection)} 
+          />
+        ) : currentTab === "editorials" ? (
+          /* Render Editorials Page */
+          <EditorialsPage onSelectArticle={setSelectedArticle} />
+        ) : currentTab === "guidelines" ? (
+          /* Render Current Guidelines */
+          <LivingGuidelines />
+        ) : currentTab === "pharma-drugs" ? (
+          /* Render Pharma and Drugs Intelligence */
+          <LivingGuidelines 
+            title="Pharma & Drugs Intelligence" 
+            subtitle="CDSCO drug advisories, FDA safety warnings, bioequivalence parameters, and novel therapeutic molecule approvals." 
+          />
+        ) : currentTab === "alerts" ? (
+          /* Render Hospital Alerts */
+          <HospitalIntelligence />
+        ) : currentTab === "treatment-updates" ? (
+          /* Render Clinical Treatment Updates */
+          <LivingGuidelines 
+            title="Clinical Treatment Updates" 
+            subtitle="Real-time clinical protocols, dosage changes, and therapeutic advancements for evidence-based patient care." 
+          />
+        ) : currentTab === "events" ? (
+          /* Render Scientific Events or Specific Event Page */
+          eventPageSlug ? (
+            <ScientificEventPage slug={eventPageSlug} onBack={() => setCurrentTab("events")} />
+          ) : (
+            <ErrorBoundary><ScientificEvents /></ErrorBoundary>
+          )
+        ) : currentTab === "proposal" ? (
+          /* Render Strategic Blueprint Proposal */
+          <ProposalPortal />
+        ) : (
+          /* Render Interactive News Feed (Comfortable/Compact layouts) */
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            {/* Feed area (Left 2 columns) */}
+            <div className="lg:col-span-2 space-y-6 sm:space-y-8">
+              
+              {/* Header Toggles */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-zinc-200 dark:border-zinc-850">
+                <div>
+                  <h2 className="text-base sm:text-lg font-extrabold tracking-tight text-zinc-900 dark:text-white uppercase font-mono">
+                    {searchQuery ? "Search Outcomes" : "Global Healthcare News & Intel"}
+                  </h2>
+                </div>
+
+                <div className="flex items-center space-x-2 sm:space-x-3 text-xs font-mono">
+                  {/* View Saved Articles Toggle */}
+                  <button
+                    onClick={() => setSearchQuery(searchQuery === "saved:true" ? "" : "saved:true")}
+                    className={`px-3 py-1 rounded-full border transition-all text-xs ${
+                      searchQuery === "saved:true"
+                        ? "bg-amber-500/10 border-amber-500/30 text-amber-600 font-bold"
+                        : "border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:text-zinc-850 dark:hover:text-zinc-200"
+                    }`}
+                  >
+                    Saved Offline ({savedArticleIds.length})
+                  </button>
+
+                  <div className="h-4 w-[1px] bg-zinc-200 dark:bg-zinc-800" />
+
+                  {/* View Mode Switcher */}
+                  <button
+                    onClick={handleToggleViewMode}
+                    className="flex items-center space-x-1 px-3 py-1 rounded-full border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 text-xs"
+                  >
+                    <SlidersHorizontal className="w-3.5 h-3.5" />
+                    <span className="capitalize">{viewMode} Mode</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Empty state */}
+              {filteredArticles.length === 0 ? (
+                <div className="text-center py-16 border border-dashed border-zinc-200 dark:border-zinc-800 rounded-2xl bg-white dark:bg-zinc-950">
+                  <SlidersHorizontal className="w-8 h-8 text-zinc-300 dark:text-zinc-700 mx-auto mb-3 animate-pulse" />
+                  <h3 className="text-sm font-bold text-zinc-700 dark:text-zinc-300">No Intelligence Reports Match Query</h3>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-500 mt-1">Clear filters or try searching another clinical keyword.</p>
+                  <button
+                    onClick={() => setSearchQuery("")}
+                    className="mt-4 px-4 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-semibold"
+                  >
+                    Clear Search
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {/* 1. Comfortable/Compact View Rendering */}
+                  {viewMode === "comfortable" ? (
+                    <div className="space-y-6">
+                      {/* Lead Story Featured layout */}
+                      {leadStory && !searchQuery && (
+                        <div
+                          id={`lead-story-${leadStory.id}`}
+                          onClick={() => setSelectedArticle(leadStory)}
+                          className="group relative rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-850 bg-white dark:bg-zinc-950 shadow-sm hover:shadow-md hover:border-teal-500/30 transition-all duration-200 cursor-pointer grid grid-cols-1 md:grid-cols-2"
+                        >
+                          <div className="aspect-[16/10] md:aspect-auto relative w-full bg-zinc-100 dark:bg-zinc-900 overflow-hidden border-b md:border-b-0 md:border-r border-zinc-200 dark:border-zinc-900">
+                            <img src={leadStory.imageUrl} alt={leadStory.headline} referrerPolicy="no-referrer" className="object-cover w-full h-full group-hover:scale-102 transition-transform duration-300" />
+                            <div className="absolute top-3 left-3 flex flex-col gap-1.5">
+                              <span className="text-[9.5px] font-mono font-semibold px-2 py-0.5 rounded bg-teal-600 text-white shadow-sm uppercase tracking-wider">
+                                Featured Lead Intel
+                              </span>
+                            </div>
+                          </div>
+                          <div className="p-6 flex flex-col justify-between">
+                            <div>
+                              <div className="flex items-center space-x-2 text-[10px] font-mono text-teal-600 dark:text-teal-400 uppercase tracking-widest mb-2.5">
+                                <span>{leadStory.category}</span>
+                                <span>•</span>
+                                <span>{new Date(leadStory.publishedAt).toLocaleDateString("en-IN", { month: "short", year: "numeric" })}</span>
+                              </div>
+                              <h3 className="text-base sm:text-lg font-bold text-zinc-900 dark:text-white leading-snug group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors mb-2 line-clamp-3">
+                                {leadStory.headline}
+                              </h3>
+                              <p className="text-xs text-zinc-650 dark:text-zinc-400 leading-relaxed line-clamp-4 font-sans font-medium mb-4">
+                                {leadStory.summary30s}
+                              </p>
+                            </div>
+                            <div className="flex items-center justify-between border-t border-zinc-100 dark:border-zinc-900 pt-3 text-[10.5px] font-mono text-zinc-400">
+                              <span>Source: <strong>{leadStory.sourceName}</strong></span>
+                              <span className="shrink-0">{leadStory.readingTimeMinutes}m read</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* MOBILE INTELLIGENCE BRIEFING WIDGET (Visible only on mobile/tablet screens < lg) */}
+                      <div className="lg:hidden space-y-4 my-4">
+                        {/* TODAY'S CLINICAL BRIEFING - MOBILE */}
+                        <div className="bg-gradient-to-r from-teal-500/5 via-white to-teal-500/5 dark:from-teal-950/30 dark:via-zinc-950 dark:to-teal-950/30 p-4 rounded-xl border border-teal-500/20 dark:border-teal-500/30 shadow-xs space-y-3">
+                          <div className="flex items-center justify-between pb-2 border-b border-teal-500/10 dark:border-teal-500/20">
+                            <div className="flex items-center space-x-2">
+                              <Activity className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+                              <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-900 dark:text-white">
+                                Today&apos;s Clinical Briefing
+                              </h3>
+                            </div>
+                            <span className="text-[9px] font-mono font-bold px-2 py-0.5 rounded bg-teal-600 text-white">
+                              EXPRESS INTEL
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                            {articles.slice(0, 3).map((art, idx) => (
+                              <div
+                                key={art.id}
+                                onClick={() => setSelectedArticle(art)}
+                                className="group cursor-pointer bg-white dark:bg-zinc-900 p-3 rounded-lg border border-zinc-200/60 dark:border-zinc-800/60 hover:border-teal-500 transition-all"
+                              >
+                                <div className="text-[8.5px] font-mono text-teal-600 dark:text-teal-400 font-bold uppercase mb-1">
+                                  Brief {idx + 1}
+                                </div>
+                                <h4 className="text-xs font-bold text-zinc-850 dark:text-zinc-200 group-hover:text-teal-600 transition-colors leading-tight line-clamp-2">
+                                  {art.headline}
+                                </h4>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* EDITOR'S HIGH-IMPACT PICKS - MOBILE */}
+                        <div className="bg-white dark:bg-zinc-950 p-4 rounded-xl border border-amber-500/20 dark:border-amber-500/30 shadow-xs space-y-3">
+                          <div className="flex items-center space-x-2 pb-2 border-b border-zinc-100 dark:border-zinc-900">
+                            <Sparkles className="w-4 h-4 text-amber-500" />
+                            <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-900 dark:text-white">
+                              Editor&apos;s High-Impact Picks
+                            </h3>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                            {articles
+                              .filter(a => a.clinicalImpactScore && a.clinicalImpactScore >= 8)
+                              .slice(0, 3)
+                              .map(art => (
+                                <div
+                                  key={art.id}
+                                  onClick={() => setSelectedArticle(art)}
+                                  className="group cursor-pointer bg-zinc-50 dark:bg-zinc-900/50 p-3 rounded-lg border border-zinc-200/60 dark:border-zinc-800/60 hover:border-amber-500 transition-all"
+                                >
+                                  <div className="flex items-center space-x-1 text-[8.5px] font-mono text-amber-600 dark:text-amber-400 font-bold uppercase mb-1">
+                                    <span>Impact {art.clinicalImpactScore}/10</span>
+                                  </div>
+                                  <h4 className="text-xs font-bold text-zinc-850 dark:text-zinc-200 group-hover:text-amber-600 transition-colors leading-tight line-clamp-2">
+                                    {art.headline}
+                                  </h4>
+                                </div>
+                              ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Main Stories Grid with Infinite Scroll for Older News */}
+                      {(() => {
+                        const storiesToDisplay = searchQuery ? filteredArticles : feedStories;
+                        const visibleStories = storiesToDisplay.slice(0, visibleCount);
+                        
+                        return (
+                          <>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                              {visibleStories.map(art => (
+                                <ArticleCard
+                                  key={art.id}
+                                  article={art}
+                                  onSelect={setSelectedArticle}
+                                  viewMode="comfortable"
+                                  isSaved={savedArticleIds.includes(art.id)}
+                                  onToggleSave={handleToggleSave}
+                                />
+                              ))}
+                            </div>
+
+                            {/* Load 20 More News Button / End of Archive Banner */}
+                            {visibleCount < storiesToDisplay.length ? (
+                              <div className="text-center py-8">
+                                <button
+                                  onClick={() => setVisibleCount(prev => prev + 20)}
+                                  className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-sans text-xs sm:text-sm font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center space-x-2.5 mx-auto cursor-pointer"
+                                >
+                                  <ChevronDown className="w-4 h-4 text-white" />
+                                  <span>Load 20 More Medical News ({visibleStories.length} shown)</span>
+                                </button>
+                              </div>
+                            ) : storiesToDisplay.length > 0 ? (
+                              <div className="text-center py-6 border-t border-zinc-200 dark:border-zinc-800 mt-8">
+                                <span className="text-xs font-mono text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">
+                                  ✓ You have reached the end of the medical news archive
+                                </span>
+                              </div>
+                            ) : null}
+                          </>
+                        );
+                      })()}
+                    </div>
+                  ) : (
+                    /* Compact List View with Infinite Scroll */
+                    <div className="space-y-4">
+                      <div className="border border-zinc-200 dark:border-zinc-850 bg-white dark:bg-zinc-950 rounded-xl overflow-hidden shadow-xs divide-y divide-zinc-100 dark:divide-zinc-900">
+                        {filteredArticles.slice(0, visibleCount).map(art => (
+                          <ArticleCard
+                            key={art.id}
+                            article={art}
+                            onSelect={setSelectedArticle}
+                            viewMode="compact"
+                            isSaved={savedArticleIds.includes(art.id)}
+                            onToggleSave={handleToggleSave}
+                          />
+                        ))}
+                      </div>
+
+                      {visibleCount < filteredArticles.length ? (
+                        <div className="text-center py-6">
+                          <button
+                            onClick={() => setVisibleCount(prev => prev + 20)}
+                            className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-sans text-xs sm:text-sm font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center space-x-2.5 mx-auto cursor-pointer"
+                          >
+                            <ChevronDown className="w-4 h-4 text-white" />
+                            <span>Load 20 More Medical News ({Math.min(visibleCount, filteredArticles.length)} shown)</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="text-center py-6 border-t border-zinc-200 dark:border-zinc-800 mt-4">
+                          <span className="text-xs font-mono text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">
+                            ✓ You have reached the end of the medical news archive
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Side columns (Right 1 column) */}
+            <div className="space-y-8">
+              
+              {/* EDITORIALS SECTION WITH PHOTO & EDITOR INFORMATION */}
+              <div 
+                onClick={() => setCurrentTab("editorials")}
+                className="bg-white dark:bg-zinc-950 p-5 rounded-xl border border-teal-200/80 dark:border-teal-800/80 shadow-sm space-y-4 font-sans cursor-pointer hover:border-teal-500 transition-all"
+              >
+                {/* Card Header */}
+                <div className="flex items-center justify-between pb-2.5 border-b border-zinc-100 dark:border-zinc-900">
+                  <div className="flex items-center space-x-2">
+                    <UserCheck className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+                    <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-900 dark:text-white">
+                      Editorials
+                    </h3>
+                  </div>
+                  <span className="px-2 py-0.5 rounded text-[9px] font-mono font-extrabold bg-teal-100 dark:bg-teal-950 text-teal-700 dark:text-teal-300 uppercase">
+                    Chief Column
+                  </span>
+                </div>
+
+                {/* Editor Profile & Information */}
+                <div className="flex items-center space-x-3 bg-teal-50/60 dark:bg-teal-950/30 p-3 rounded-xl border border-teal-100 dark:border-teal-900/40">
+                  <img
+                    src="https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&w=200&q=80"
+                    alt="Dr. K. Narayana"
+                    className="w-13 h-13 rounded-full object-cover border-2 border-teal-600 shadow-md shrink-0"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <h4 className="text-xs font-extrabold text-zinc-900 dark:text-white truncate">
+                      Dr. K. Narayana, MD, DM
+                    </h4>
+                    <p className="text-[10px] font-mono text-teal-700 dark:text-teal-400 font-bold leading-tight">
+                      Editor-in-Chief & Lead Strategist
+                    </p>
+                    <p className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate mt-0.5">
+                      HealicWire Editorial Directorate
+                    </p>
+                  </div>
+                </div>
+
+                {/* Latest Featured Editorial Brief */}
+                {(() => {
+                  const latestEditorial = articles.find(a => a.category === "Research" || a.category === "Clinical" || a.sourceName?.includes("Editorial")) || articles[0];
+                  
+                  return latestEditorial ? (
+                    <div className="group p-3 rounded-xl bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/60 group-hover:border-teal-500 transition-all space-y-1.5">
+                      <div className="flex items-center justify-between text-[9px] font-mono text-teal-600 dark:text-teal-400 font-bold uppercase">
+                        <span>FEATURED EDITORIAL NOTE</span>
+                        <span>Jul 2026</span>
+                      </div>
+                      <h4 className="text-xs font-extrabold text-zinc-850 dark:text-zinc-150 group-hover:text-teal-600 transition-colors leading-snug line-clamp-2">
+                        {latestEditorial.headline}
+                      </h4>
+                      <p className="text-[11px] text-zinc-600 dark:text-zinc-400 line-clamp-2 italic font-serif leading-relaxed">
+                        &ldquo;Establishing evidence-based guardrails while integrating modern AI protocols into Indian clinical workflows.&rdquo;
+                      </p>
+                      <div className="pt-1 flex items-center text-[10px] font-mono font-bold text-teal-600 dark:text-teal-400 group-hover:underline">
+                        <span>Read All Editorials</span>
+                        <ChevronRight className="w-3 h-3 ml-0.5" />
+                      </div>
+                    </div>
+                  ) : null;
+                })()}
+              </div>
+
+              {/* TODAY'S CLINICAL BRIEFING */}
+              <div className="bg-white dark:bg-zinc-950 p-5 rounded-xl border border-zinc-200 dark:border-zinc-850 shadow-sm space-y-4">
+                <div className="flex items-center space-x-2 pb-2 border-b border-zinc-100 dark:border-zinc-900">
+                  <Activity className="w-4 h-4 text-teal-600" />
+                  <h3 className="text-xs font-mono font-bold uppercase text-zinc-700 dark:text-zinc-350">
+                    Today&apos;s Clinical Briefing
+                  </h3>
+                </div>
+                <div className="space-y-3">
+                  {articles.slice(0, 3).map((art, idx) => (
+                    <div
+                      key={art.id}
+                      onClick={() => setSelectedArticle(art)}
+                      className="group cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900/30 p-2 rounded-lg transition-all"
+                    >
+                      <div className="text-[9px] font-mono text-teal-600 dark:text-teal-400 font-bold uppercase">
+                        Brief {idx + 1}
+                      </div>
+                      <h4 className="text-xs font-bold text-zinc-850 dark:text-zinc-200 group-hover:text-teal-600 transition-colors leading-tight line-clamp-2 mt-0.5">
+                        {art.headline}
+                      </h4>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* EDITORS' CHOICES */}
+              <div className="bg-white dark:bg-zinc-950 p-5 rounded-xl border border-zinc-200 dark:border-zinc-850 shadow-sm space-y-4">
+                <div className="flex items-center space-x-2 pb-2 border-b border-zinc-100 dark:border-zinc-900">
+                  <Star className="w-4 h-4 text-amber-500" />
+                  <h3 className="text-xs font-mono font-bold uppercase text-zinc-700 dark:text-zinc-300">
+                    Editor&apos;s High-Impact Picks
+                  </h3>
+                </div>
+                <div className="space-y-3 text-xs">
+                  {articles
+                    .filter(art => (art.impactScores?.clinicalPractice || 0) + (art.impactScores?.publicHealth || 0) >= 8)
+                    .slice(0, 5)
+                    .map(art => {
+                      const totalImpact = (art.impactScores?.clinicalPractice || 0) + (art.impactScores?.publicHealth || 0);
+                      return (
+                        <div
+                          key={art.id}
+                          onClick={() => setSelectedArticle(art)}
+                          className="flex items-start gap-2 cursor-pointer hover:text-teal-600 transition-all font-sans"
+                        >
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 font-bold shrink-0">
+                            Impact {totalImpact}/10
+                          </span>
+                          <span className="font-semibold text-zinc-800 dark:text-zinc-300 line-clamp-2">{art.headline}</span>
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+
+              {/* CLINICIAN INTERACTIVE NEWSLETTER FORM */}
+              <div className="bg-white dark:bg-zinc-950 p-5 rounded-xl border border-zinc-200 dark:border-zinc-850 shadow-sm space-y-4">
+                <div className="flex items-center space-x-2 pb-2 border-b border-zinc-100 dark:border-zinc-900">
+                  <Mail className="w-4 h-4 text-teal-600" />
+                  <h3 className="text-xs font-mono font-bold uppercase text-zinc-700 dark:text-zinc-300">
+                    Clinician intelligence Digest
+                  </h3>
+                </div>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-normal font-sans">
+                  Join 42,000+ clinicians. Get peer-reviewed healthcare news summaries, guideline updates, and hospital alert digests straight to your inbox.
+                </p>
+
+                {newsSuccess ? (
+                  <div className="p-3.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 text-xs font-semibold flex items-center space-x-2">
+                    <CheckCircle className="w-4 h-4" />
+                    <span>{newsSuccess}</span>
+                  </div>
+                ) : (
+                  <form onSubmit={handleNewsletterSubmit} className="space-y-3">
+                    <div>
+                      <input
+                        type="email"
+                        required
+                        placeholder="Clinical Email address (e.g. dr@hospital.in)"
+                        value={newsEmail}
+                        onChange={e => setNewsEmail(e.target.value)}
+                        className="w-full px-3 py-1.8 text-xs rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-[10.5px]">
+                      <select
+                        value={newsSpecialty}
+                        onChange={e => setNewsSpecialty(e.target.value)}
+                        className="p-1.5 rounded border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300"
+                      >
+                        <option value="General Medicine">General Medicine</option>
+                        <option value="Cardiology">Cardiology</option>
+                        <option value="Infectious Diseases">Infectious Diseases</option>
+                        <option value="Hospital Operations">Hospital Admin</option>
+                        <option value="Pediatrics">Pediatrics</option>
+                      </select>
+                      <select
+                        value={newsFrequency}
+                        onChange={e => setNewsFrequency(e.target.value as any)}
+                        className="p-1.5 rounded border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300"
+                      >
+                        <option value="weekly">Weekly Digest</option>
+                        <option value="daily">Daily Brief</option>
+                      </select>
+                    </div>
+                    <button
+                      type="submit"
+                      className="w-full py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-mono text-xs font-bold uppercase tracking-wider cursor-pointer shadow-md shadow-teal-500/15"
+                    >
+                      Subscribe Digest
+                    </button>
+                  </form>
+                )}
+              </div>
+
+              {/* WHAT WE DO INTERACTIVE SLIDER */}
+              <WhatWeDoSlider
+                onSelectTab={(tabKey) => {
+                  setCurrentTab(tabKey);
+                  setSelectedArticle(null);
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+              />
+
+              {/* PLATFORM METADATA FOOTNOTE */}
+              <div className="p-3 sm:p-4 rounded-xl border border-dashed border-zinc-200 dark:border-zinc-850 text-[9.5px] sm:text-[11px] font-mono text-zinc-500 dark:text-zinc-400 space-y-1 bg-zinc-50/50 dark:bg-zinc-950/40">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                  <span>Publisher: <strong className="text-zinc-700 dark:text-zinc-300">Healic Health Care Solutions</strong></span>
+                  <span>Regulatory: <strong className="text-zinc-700 dark:text-zinc-300">Clinical Evidence Aware (ICMR/CDSCO)</strong></span>
+                </div>
+                <div className="pt-1 border-t border-dashed border-zinc-200 dark:border-zinc-850">
+                  <span>Verification: <strong className="text-teal-600 dark:text-teal-400">AI Augmented & Human Reviewed</strong></span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        )}
+      </main>
+
+      {/* FOOTER POLICIES & SECTIONS */}
+      <footer className="border-t border-zinc-200 dark:border-zinc-900 bg-white dark:bg-zinc-900 py-8 text-xs text-zinc-500">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="flex items-center space-x-2">
+            <HealicLogo className="w-5 h-5" />
+            <span className="font-bold font-mono tracking-tight text-zinc-900 dark:text-white">
+              Healic<span className="text-teal-600">Wire</span>
+            </span>
+            <span className="text-zinc-300 dark:text-zinc-800">|</span>
+            <span>© 2026 Healic Care. All rights reserved.</span>
+          </div>
+
+          <div className="flex flex-wrap gap-4 font-mono text-[10.5px]">
+            <button onClick={() => {
+              setCurrentTab("proposal");
+              setSelectedArticle(null);
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }} className={`hover:text-teal-600 ${currentTab === "proposal" ? "text-teal-600 font-bold" : ""}`}>What we do</button>
+            <button onClick={() => setShowPolicies("about")} className="hover:text-teal-600">About HealicWire</button>
+            <button onClick={() => setShowPolicies("editorial")} className="hover:text-teal-600">Editorial Policy</button>
+            <button onClick={() => setShowPolicies("disclaimer")} className="hover:text-teal-600">Medical Disclaimer</button>
+          </div>
+        </div>
+      </footer>
+
+      {/* ADMIN CMS INTERFACE DIALOG OVERLAY */}
+      {showAdmin && (
+        <AdminCMS
+          onClose={closeAdmin}
+        />
+      )}
+
+      {/* POLICY/MODAL PORTALS */}
+      {showPolicies && (
+        <div className="fixed inset-0 z-55 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-zinc-950 w-full max-w-lg p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-2xl relative animate-scaleIn">
+            <button
+              onClick={() => setShowPolicies(null)}
+              className="absolute top-4 right-4 p-1 rounded-lg text-zinc-450 hover:text-zinc-650"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {showPolicies === "about" && (
+              <div className="space-y-4">
+                <div className="flex items-center space-x-2 text-teal-600 dark:text-teal-400">
+                  <Landmark className="w-5 h-5" />
+                  <h3 className="font-bold uppercase font-mono">About HealicWire</h3>
+                </div>
+                <p className="text-xs text-zinc-600 dark:text-zinc-450 leading-relaxed font-sans">
+                  HealicWire is a futuristic clinical news and evidence intelligence platform owned by Healic Health Care Solutions.
+                  We operate on a unique clinical journalism workflow where global healthcare releases, regulatory approvals, and journal preprints are captured, summarized, and explained with audience-specific guidelines.
+                  Our primary mission is to support continuous medical education and real-time clinical preparedness for healthcare practitioners.
+                </p>
+                <div className="p-3 bg-zinc-50 dark:bg-zinc-900/40 rounded border border-zinc-150 dark:border-zinc-850 font-mono text-[10px]">
+                  <strong>Our Motto:</strong> From News to Knowledge to Action.
+                </div>
+              </div>
+            )}
+
+            {showPolicies === "editorial" && (
+              <div className="space-y-4">
+                <div className="flex items-center space-x-2 text-teal-600 dark:text-teal-400">
+                  <FileText className="w-5 h-5" />
+                  <h3 className="font-bold uppercase font-mono">Editorial Policy & AI Safety</h3>
+                </div>
+                <p className="text-xs text-zinc-600 dark:text-zinc-450 leading-relaxed font-sans">
+                  HealicWire enforces a strict code of healthcare safety and news authenticity. We NEVER invent medical facts, trial outcomes, drug approvals, or statistical quotas. 
+                  <br /><br />
+                  <strong>AI Usage Principles:</strong> Google AI Based API is leveraged to organize, draft summaries, suggest MCQ parameters, and identify verification references. However, all AI drafts must pass rigorous human editor review before moving to the published state. We maintain fully auditable logs of AI prompts and edits to ensure clinical safety and intellectual transparency.
+                </p>
+              </div>
+            )}
+
+            {showPolicies === "disclaimer" && (
+              <div className="space-y-4">
+                <div className="flex items-center space-x-2 text-red-600 dark:text-red-400">
+                  <AlertTriangle className="w-5 h-5" />
+                  <h3 className="font-bold uppercase font-mono">Medical Disclaimer</h3>
+                </div>
+                <p className="text-xs text-zinc-600 dark:text-zinc-450 leading-relaxed font-sans">
+                  All content published on HealicWire (including articles, clinical analyses, living guidelines, AI clinical assistant replies, and interactive exam quizzes) is provided for informational, educational, and institutional warning purposes only.
+                  <br /><br />
+                  This content does NOT constitute medical advice, personalized diagnosis, or active treatment prescriptions. It should not be used as a substitute for professional medical consultation or expert clinical judgement.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Simple absolute close SVG
+function X({ className, ...props }: any) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className} {...props}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+    </svg>
+  );
+}

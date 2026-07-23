@@ -1,0 +1,113 @@
+@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400..700;1,400..700&family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap');
+@import "tailwindcss";
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Lora", ui-serif, Georgia, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* Map existing Tailwind utility classes to dynamic, high-contrast, eye-safe warm color tokens */
+  --color-white: var(--color-white-custom);
+  --color-zinc-50: var(--color-zinc-50-custom);
+  --color-zinc-100: var(--color-zinc-100-custom);
+  --color-zinc-150: var(--color-zinc-150-custom);
+  --color-zinc-200: var(--color-zinc-200-custom);
+  --color-zinc-300: var(--color-zinc-300-custom);
+  --color-zinc-400: var(--color-zinc-400-custom);
+  --color-zinc-500: var(--color-zinc-500-custom);
+  --color-zinc-650: var(--color-zinc-650-custom);
+  --color-zinc-700: var(--color-zinc-700-custom);
+  --color-zinc-800: var(--color-zinc-800-custom);
+  --color-zinc-850: var(--color-zinc-850-custom);
+  --color-zinc-900: var(--color-zinc-900-custom);
+  --color-zinc-950: var(--color-zinc-950-custom);
+}
+
+:root {
+  --color-white-custom: #FCFAF7;       /* Warm-white card background */
+  --color-zinc-50-custom: #FAF8F5;     /* Page background (light warm) */
+  --color-zinc-100-custom: #F3ECE1;    /* Alternating layout sections */
+  --color-zinc-150-custom: #EDE6DB;    /* Warm beige border style */
+  --color-zinc-200-custom: #E5DCCB;    /* Warm border */
+  --color-zinc-300-custom: #D0C69A;    /* Contrast elements */
+  
+  /* Lighter, colorful, eye-safe warm chocolate/coffee-charcoal shades for light theme text */
+  --color-zinc-400-custom: #8E8B83;    /* Secondary warm-grey text */
+  --color-zinc-500-custom: #74716A;    /* Muted body text */
+  --color-zinc-650-custom: #5E5B55;    /* Regular body text */
+  --color-zinc-700-custom: #4E4B45;    /* Title and head text (charcoal) */
+  --color-zinc-800-custom: #3F3C37;    /* Dark elements/buttons */
+  --color-zinc-850-custom: #33312C;    /* Dark titles/headers */
+  --color-zinc-900-custom: #282622;    /* Contrast backgrounds/text */
+  --color-zinc-950-custom: #1C1B18;    /* Darkest background/text */
+}
+
+.dark {
+  --color-white-custom: #FCFAF7;       /* Warm cream background for cards */
+  --color-zinc-50-custom: #0D0E10;     /* Deep dark page background */
+  --color-zinc-100-custom: #141619;    /* Dark alternating layout sections */
+  --color-zinc-150-custom: #EDE6DB;    /* Warm beige border style */
+  --color-zinc-200-custom: #E5DCCB;    /* Warm border */
+  --color-zinc-300-custom: #D0C69A;    /* Contrast elements */
+  
+  /* Text colors outside cards (on dark background) are light warm cream */
+  --color-zinc-400-custom: #8C867E;    /* Secondary warm-grey text */
+  --color-zinc-500-custom: #A19B95;    /* Muted body text */
+  --color-zinc-650-custom: #C5C0B9;    /* Regular body text */
+  --color-zinc-700-custom: #EDE6DB;    /* Title and head text */
+  --color-zinc-800-custom: #FAF8F5;    /* Dark elements/buttons */
+  --color-zinc-850-custom: #FCFAF7;    /* Dark titles/headers */
+  --color-zinc-900-custom: #0D0E10;    /* Page background (darkest) */
+  --color-zinc-950-custom: #0A0B0C;    /* Page background (darkest) */
+}
+
+@layer base {
+  body {
+    background-color: var(--color-zinc-50-custom);
+    color: var(--color-zinc-700-custom);
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  /* Custom card and container overrides inside dark mode to force warm cream background and dark text */
+  .dark .bg-white, 
+  .dark .bg-zinc-950 {
+    background-color: #FCFAF7 !important;
+    color: #33312C !important;
+    border-color: #EDE6DB !important;
+  }
+
+  .dark .bg-white *, 
+  .dark .bg-zinc-950 * {
+    --color-white: #33312C;
+    --color-zinc-50: #FCFAF7;
+    --color-zinc-100: #F3ECE1;
+    --color-zinc-150: #EDE6DB;
+    --color-zinc-200: #E5DCCB;
+    --color-zinc-300: #D0C69A;
+    --color-zinc-400: #8E8B83;
+    --color-zinc-500: #74716A;
+    --color-zinc-650: #5E5B55;
+    --color-zinc-700: #4E4B45;
+    --color-zinc-800: #3F3C37;
+    --color-zinc-850: #33312C;
+    --color-zinc-900: #282622;
+    --color-zinc-950: #1C1B18;
+  }
+
+  /* Fine-tune scrollbar matching */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--color-zinc-50-custom);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-zinc-150-custom);
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-zinc-300-custom);
+  }
+}
