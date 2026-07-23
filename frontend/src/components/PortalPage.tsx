@@ -9,6 +9,7 @@ import {
   BookOpen, FolderPlus, Sparkles, Building2, CheckCircle2, FileText, Share2
 } from "lucide-react";
 import { Article } from "../types";
+import { supabase, mapArticleFromDB } from "../lib/supabase";
 
 interface PortalPageProps {
   section: string;
@@ -22,25 +23,26 @@ export default function PortalPage({ section, slug, onBack }: PortalPageProps) {
 
   useEffect(() => {
     setLoading(true);
-    fetch("/api/articles")
-      .then(res => res.json())
-      .then((articles: Article[]) => {
-        const found = articles.find(a => 
-          ((a as any).slug && (a as any).slug.toLowerCase() === slug.toLowerCase()) ||
-          a.id === slug ||
-          a.headline.toLowerCase().replace(/[^a-z0-9]+/g, "-").includes(slug.toLowerCase())
-        );
-        if (found) {
-          setPageData(found);
-        } else {
-          setPageData(articles[0] || null);
+    const fetchPortal = async () => {
+      try {
+        const { data, error } = await supabase.from('articles').select('*');
+        if (error) throw error;
+        if (data) {
+          const mapped = data.map(mapArticleFromDB);
+          const found = mapped.find(a => 
+            ((a as any).slug && (a as any).slug.toLowerCase() === slug.toLowerCase()) ||
+            a.id === slug ||
+            a.headline.toLowerCase().replace(/[^a-z0-9]+/g, "-").includes(slug.toLowerCase())
+          );
+          setPageData(found || mapped[0] || null);
         }
-        setLoading(false);
-      })
-      .catch(err => {
+      } catch (err) {
         console.error(err);
+      } finally {
         setLoading(false);
-      });
+      }
+    };
+    fetchPortal();
   }, [slug]);
 
   if (loading) {

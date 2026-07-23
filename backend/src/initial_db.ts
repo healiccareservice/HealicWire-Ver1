@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Article, LivingGuideline, HospitalAlert, EvidenceLevel, Region, ImpactSeverity } from "./types";
+import { Article, LivingGuideline, HospitalAlert, EvidenceLevel, Region, ImpactSeverity } from "./types.js";
 
 export const initialArticles: Article[] = [
   {

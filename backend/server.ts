@@ -10,14 +10,16 @@ import path from "path";
 import fs from "fs";
 import { GoogleGenAI, Type } from "@google/genai";
 import { createClient } from "@supabase/supabase-js";
-import { initialArticles, initialLivingGuidelines, initialHospitalAlerts } from "./src/initial_db";
-import { Article, LivingGuideline, HospitalAlert, EvidenceLevel, Region, ImpactSeverity, MCQ, Flashcard, VivaQuestion, ScientificEvent } from "./src/types";
-import { initialEvents } from "./src/initial_events";
+import { initialArticles, initialLivingGuidelines, initialHospitalAlerts } from "./src/initial_db.js";
+import { Article, LivingGuideline, HospitalAlert, EvidenceLevel, Region, ImpactSeverity, MCQ, Flashcard, VivaQuestion, ScientificEvent } from "./src/types.js";
+import { initialEvents } from "./src/initial_events.js";
 
 dotenv.config();
 
 const PORT = process.env.PORT || 8080;
-const DB_FILE = path.join(process.cwd(), "db.json");
+// Use /tmp/db.json for writable persistence in Cloud Run
+const DB_FILE = process.env.NODE_ENV === "production" || process.env.K_SERVICE ? "/tmp/db.json" : path.join(process.cwd(), "db.json");
+const ORIGINAL_DB_FILE = path.join(process.cwd(), "db.json");
 
 
 // Helper to load/save persistent database
@@ -33,6 +35,16 @@ function loadDb(): {
   uploadedImages?: any[];
 } {
   let db: any;
+  
+  // If we are using /tmp/db.json but it doesn't exist yet, copy it from the bundled db.json
+  if (DB_FILE !== ORIGINAL_DB_FILE && !fs.existsSync(DB_FILE) && fs.existsSync(ORIGINAL_DB_FILE)) {
+    try {
+      fs.copyFileSync(ORIGINAL_DB_FILE, DB_FILE);
+    } catch (e) {
+      console.error("Failed to copy db.json to /tmp", e);
+    }
+  }
+
   if (fs.existsSync(DB_FILE)) {
     try {
       const data = fs.readFileSync(DB_FILE, "utf-8");
@@ -220,7 +232,7 @@ async function startServer() {
 
     if (specialty) {
       const specStr = String(specialty).toLowerCase();
-      filtered = filtered.filter(a => a.specialties.some(s => s.toLowerCase() === specStr));
+      filtered = filtered.filter(a => a.specialties.some((s: string) => s.toLowerCase() === specStr));
     }
 
     if (region) {
@@ -264,96 +276,115 @@ async function startServer() {
   });
 
   // Create article (Admin/CMS)
-  app.post("/api/admin/articles", (req, res) => {
-    const newArticle: Article = {
-      id: "art-" + Date.now(),
-      slug: req.body.headline.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""),
-      headline: req.body.headline,
-      subhead: req.body.subhead || "",
-      category: req.body.category || "Clinical",
-      specialties: req.body.specialties || [],
-      region: req.body.region || Region.GLOBAL,
-      imageUrl: req.body.imageUrl || "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=800&q=80",
-      imageCredit: req.body.imageCredit || "Editorial Illustration",
-      imageType: req.body.imageType || "Illustration",
-      publishedAt: new Date().toISOString(),
-      sourcePublishedAt: req.body.sourcePublishedAt || new Date().toISOString(),
-      readingTimeMinutes: req.body.readingTimeMinutes || 3,
-      status: req.body.status || "published",
-      sourceName: req.body.sourceName || "Official Release",
-      sourceUrl: req.body.sourceUrl || "#",
-      evidenceLevel: req.body.evidenceLevel || EvidenceLevel.EXPERT_OPINION,
-      isAiAssisted: req.body.isAiAssisted || false,
-      summary30s: req.body.summary30s || "",
-      summary2min: req.body.summary2min || "",
-      bodyAnalysis: req.body.bodyAnalysis || "",
-      whyThisMatters: req.body.whyThisMatters || {
-        clinicians: "",
-        students: "",
-        hospitalAdministrators: "",
-        patients: "",
-        researchers: ""
-      },
-      whatChanged: req.body.whatChanged,
-      impactScores: req.body.impactScores || {
-        clinicalPractice: 3,
-        medicalEducation: 3,
-        research: 3,
-        publicHealth: 3,
-        hospitalOperations: 3,
-        patientCare: 3
-      },
-      indiaRelevance: req.body.indiaRelevance || {
-        status: "Directly applicable",
-        explanation: ""
-      },
-      peerReviewed: req.body.peerReviewed !== undefined ? req.body.peerReviewed : true,
-      fundingSource: req.body.fundingSource || "None disclosed",
-      coiNote: req.body.coiNote || "None disclosed",
-      studyDesign: req.body.studyDesign,
-      sampleSize: req.body.sampleSize,
-      references: req.body.references || [],
-      learningModule: req.body.learningModule,
-      factCheckClaims: req.body.factCheckClaims || [],
-      views: 0
-    };
-
-    db.articles.push(newArticle);
-    saveDb(db);
-    res.status(201).json(newArticle);
+  app.post("/api/admin/articles", async (req, res) => {
+    try {
+      const slug = req.body.headline.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+      const payload = {
+        id: "art-" + Date.now(),
+        slug: slug,
+        headline: req.body.headline,
+        subhead: req.body.subhead || "",
+        category: req.body.category || "Clinical",
+        specialties: req.body.specialties || [],
+        region: req.body.region || Region.GLOBAL,
+        image_url: req.body.imageUrl || "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=800&q=80",
+        image_credit: req.body.imageCredit || "Editorial Illustration",
+        image_type: req.body.imageType || "Illustration",
+        published_at: new Date().toISOString(),
+        source_published_at: req.body.sourcePublishedAt || new Date().toISOString(),
+        reading_time_minutes: req.body.readingTimeMinutes || 3,
+        status: req.body.status || "published",
+        source_name: req.body.sourceName || "Official Release",
+        source_url: req.body.sourceUrl || "#",
+        evidence_level: req.body.evidenceLevel || EvidenceLevel.EXPERT_OPINION,
+        is_ai_assisted: req.body.isAiAssisted || false,
+        summary_30s: req.body.summary30s || "",
+        summary_2min: req.body.summary2min || "",
+        body_analysis: req.body.bodyAnalysis || "",
+        why_this_matters: req.body.whyThisMatters || { clinicians: "", students: "", hospitalAdministrators: "", patients: "", researchers: "" },
+        what_changed: req.body.whatChanged,
+        impact_scores: req.body.impactScores || { clinicalPractice: 3, medicalEducation: 3, research: 3, publicHealth: 3, hospitalOperations: 3, patientCare: 3 },
+        india_relevance: req.body.indiaRelevance || { status: "Directly applicable", explanation: "" },
+        peer_reviewed: req.body.peerReviewed !== undefined ? req.body.peerReviewed : true,
+        funding_source: req.body.fundingSource || "None disclosed",
+        coi_note: req.body.coiNote || "None disclosed",
+        study_design: req.body.studyDesign,
+        sample_size: req.body.sampleSize,
+        "references": req.body.references || [],
+        learning_module: req.body.learningModule,
+        fact_check_claims: req.body.factCheckClaims || [],
+        clinical_impact_score: req.body.clinicalImpactScore
+      };
+      
+      const { data, error } = await supabaseAdmin.from('articles').insert([payload]).select();
+      if (error) throw error;
+      res.status(201).json(data[0]);
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
   });
 
   // Edit / Update article
-  app.put("/api/admin/articles/:id", (req, res) => {
-    const { id } = req.params;
-    const index = db.articles.findIndex(a => a.id === id);
-
-    if (index === -1) {
-      return res.status(404).json({ error: "Article not found" });
+  app.put("/api/admin/articles/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      const updatePayload: any = {};
+      if (req.body.headline !== undefined) updatePayload.headline = req.body.headline;
+      if (req.body.subhead !== undefined) updatePayload.subhead = req.body.subhead;
+      if (req.body.category !== undefined) updatePayload.category = req.body.category;
+      if (req.body.specialties !== undefined) updatePayload.specialties = req.body.specialties;
+      if (req.body.region !== undefined) updatePayload.region = req.body.region;
+      if (req.body.imageUrl !== undefined) updatePayload.image_url = req.body.imageUrl;
+      if (req.body.imageCredit !== undefined) updatePayload.image_credit = req.body.imageCredit;
+      if (req.body.imageType !== undefined) updatePayload.image_type = req.body.imageType;
+      if (req.body.sourcePublishedAt !== undefined) updatePayload.source_published_at = req.body.sourcePublishedAt;
+      if (req.body.readingTimeMinutes !== undefined) updatePayload.reading_time_minutes = req.body.readingTimeMinutes;
+      if (req.body.status !== undefined) updatePayload.status = req.body.status;
+      if (req.body.sourceName !== undefined) updatePayload.source_name = req.body.sourceName;
+      if (req.body.sourceUrl !== undefined) updatePayload.source_url = req.body.sourceUrl;
+      if (req.body.evidenceLevel !== undefined) updatePayload.evidence_level = req.body.evidenceLevel;
+      if (req.body.isAiAssisted !== undefined) updatePayload.is_ai_assisted = req.body.isAiAssisted;
+      if (req.body.summary30s !== undefined) updatePayload.summary_30s = req.body.summary30s;
+      if (req.body.summary2min !== undefined) updatePayload.summary_2min = req.body.summary2min;
+      if (req.body.bodyAnalysis !== undefined) updatePayload.body_analysis = req.body.bodyAnalysis;
+      if (req.body.whyThisMatters !== undefined) updatePayload.why_this_matters = req.body.whyThisMatters;
+      if (req.body.whatChanged !== undefined) updatePayload.what_changed = req.body.whatChanged;
+      if (req.body.impactScores !== undefined) updatePayload.impact_scores = req.body.impactScores;
+      if (req.body.indiaRelevance !== undefined) updatePayload.india_relevance = req.body.indiaRelevance;
+      if (req.body.peerReviewed !== undefined) updatePayload.peer_reviewed = req.body.peerReviewed;
+      if (req.body.fundingSource !== undefined) updatePayload.funding_source = req.body.fundingSource;
+      if (req.body.coiNote !== undefined) updatePayload.coi_note = req.body.coiNote;
+      if (req.body.studyDesign !== undefined) updatePayload.study_design = req.body.studyDesign;
+      if (req.body.sampleSize !== undefined) updatePayload.sample_size = req.body.sampleSize;
+      if (req.body.references !== undefined) updatePayload["references"] = req.body.references;
+      if (req.body.learningModule !== undefined) updatePayload.learning_module = req.body.learningModule;
+      if (req.body.factCheckClaims !== undefined) updatePayload.fact_check_claims = req.body.factCheckClaims;
+      if (req.body.clinicalImpactScore !== undefined) updatePayload.clinical_impact_score = req.body.clinicalImpactScore;
+      if (req.body.slug !== undefined) updatePayload.slug = req.body.slug;
+      
+      const { data, error } = await supabaseAdmin.from('articles').update(updatePayload).eq('id', id).select();
+      if (error) throw error;
+      if (!data || data.length === 0) return res.status(404).json({ error: "Article not found" });
+      res.json(data[0]);
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
     }
-
-    db.articles[index] = {
-      ...db.articles[index],
-      ...req.body,
-      updatedAt: new Date().toISOString()
-    };
-
-    saveDb(db);
-    res.json(db.articles[index]);
   });
 
   // Delete article
-  app.delete("/api/admin/articles/:id", (req, res) => {
-    const { id } = req.params;
-    const index = db.articles.findIndex(a => a.id === id);
-
-    if (index === -1) {
-      return res.status(404).json({ error: "Article not found" });
+  app.delete("/api/admin/articles/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { error } = await supabaseAdmin.from('articles').delete().eq('id', id);
+      if (error) throw error;
+      res.json({ success: true });
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
     }
-
-    db.articles.splice(index, 1);
-    saveDb(db);
-    res.json({ success: true });
   });
 
   // Get living guidelines
@@ -367,111 +398,141 @@ async function startServer() {
   });
 
   // Add scientific event
-  app.post("/api/scientific-events", (req, res) => {
-    const { 
-      title, organizer, scope, eventType, targetProfessions, startDate, endDate, duration, 
-      venue, city, state, country, institution, format, specialties, cmeCredits, 
-      cmeAccreditationBody, description, objectives, abstractDeadline, registrationDeadline, 
-      earlyBirdDeadline, earlyBirdCost, cost, seatsAvailable, seatsLeft, imageUrl, posterUrl, 
-      keynoteSpeakers, speakerProfiles, schedule, registrationUrl, organizerWebsite, faqs,
-      submissionUrl, certificateUrl, souvenirUrl, webpageImage, slug
-    } = req.body;
-    
-    if (!title || !organizer || !startDate || !venue) {
-      return res.status(400).json({ error: "Missing required fields (title, organizer, startDate, venue)" });
-    }
+  app.post("/api/scientific-events", async (req, res) => {
+    try {
+      const { 
+        title, organizer, scope, eventType, targetProfessions, startDate, endDate, duration, 
+        venue, city, state, country, institution, format, specialties, cmeCredits, 
+        cmeAccreditationBody, description, objectives, abstractDeadline, registrationDeadline, 
+        earlyBirdDeadline, earlyBirdCost, cost, seatsAvailable, seatsLeft, imageUrl, posterUrl, 
+        keynoteSpeakers, speakerProfiles, schedule, registrationUrl, organizerWebsite, faqs,
+        submissionUrl, certificateUrl, souvenirUrl, webpageImage, slug
+      } = req.body;
+      
+      if (!title || !organizer || !startDate || !venue) {
+        return res.status(400).json({ error: "Missing required fields (title, organizer, startDate, venue)" });
+      }
 
-    const newEvent: ScientificEvent = {
-      id: "evt-" + Date.now(),
-      title,
-      organizer,
-      scope: scope || "Local",
-      eventType: eventType || "Conference",
-      targetProfessions: targetProfessions || ["MBBS", "MD/MS", "DM/MCh"],
-      startDate,
-      endDate: endDate || startDate,
-      duration: duration || "1 Day",
-      venue,
-      city: city || "Local",
-      state: state || "",
-      country: country || "India",
-      institution: institution || organizer,
-      format: format || "In-Person",
-      specialties: specialties && specialties.length > 0 ? specialties : ["General Medicine"],
-      cmeCredits: Number(cmeCredits) || 0,
-      cmeAccreditationBody: cmeAccreditationBody || "Medical Council",
-      description: description || "",
-      objectives: objectives || [],
-      abstractDeadline: abstractDeadline || undefined,
-      registrationDeadline: registrationDeadline || undefined,
-      earlyBirdDeadline: earlyBirdDeadline || undefined,
-      earlyBirdCost: earlyBirdCost || undefined,
-      cost: cost || "Free",
-      seatsAvailable: Number(seatsAvailable) || 100,
-      seatsLeft: Number(seatsLeft) || Number(seatsAvailable) || 100,
-      status: "Approved",
-      imageUrl: imageUrl || "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=800&q=80",
-      posterUrl: posterUrl || undefined,
-      keynoteSpeakers: keynoteSpeakers || [],
-      speakerProfiles: speakerProfiles || [],
-      schedule: schedule || [],
-      registrationUrl: registrationUrl || "#",
-      submissionUrl: submissionUrl || undefined,
-      certificateUrl: certificateUrl || undefined,
-      souvenirUrl: souvenirUrl || undefined,
-      webpageImage: webpageImage || undefined,
-      slug: slug || title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""),
-      organizerWebsite: organizerWebsite || undefined,
-      faqs: faqs || [],
-      viewsCount: 1,
-      registrationsCount: 0,
-      rating: 5.0
-    };
+      const payload = {
+        id: "evt-" + Date.now(),
+        title,
+        organizer,
+        scope: scope || "Local",
+        event_type: eventType || "Conference",
+        target_professions: targetProfessions || ["MBBS", "MD/MS", "DM/MCh"],
+        start_date: startDate,
+        end_date: endDate || startDate,
+        duration: duration || "1 Day",
+        venue,
+        city: city || "Local",
+        state: state || "",
+        country: country || "India",
+        institution: institution || organizer,
+        format: format || "In-Person",
+        specialties: specialties && specialties.length > 0 ? specialties : ["General Medicine"],
+        cme_credits: Number(cmeCredits) || 0,
+        cme_accreditation_body: cmeAccreditationBody || "Medical Council",
+        description: description || "",
+        objectives: objectives || [],
+        abstract_deadline: abstractDeadline || undefined,
+        registration_deadline: registrationDeadline || undefined,
+        early_bird_deadline: earlyBirdDeadline || undefined,
+        early_bird_cost: earlyBirdCost || undefined,
+        cost: cost || "Free",
+        seats_available: Number(seatsAvailable) || 100,
+        seats_left: Number(seatsLeft) || Number(seatsAvailable) || 100,
+        status: "Approved",
+        image_url: imageUrl || "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=800&q=80",
+        poster_url: posterUrl || undefined,
+        keynote_speakers: keynoteSpeakers || [],
+        speaker_profiles: speakerProfiles || [],
+        schedule: schedule || [],
+        registration_url: registrationUrl || "#",
+        submission_url: submissionUrl || undefined,
+        certificate_url: certificateUrl || undefined,
+        souvenir_url: souvenirUrl || undefined,
+        webpage_image: webpageImage || undefined,
+        slug: slug || title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""),
+        organizer_website: organizerWebsite || undefined,
+        faqs: faqs || [],
+        views_count: 1,
+        registrations_count: 0,
+        rating: 5.0
+      };
 
-    if (!db.events) {
-      db.events = [];
+      const { data, error } = await supabaseAdmin.from('scientific_events').insert([payload]).select();
+      if (error) throw error;
+      res.status(201).json(data[0]);
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
     }
-    db.events.unshift(newEvent);
-    saveDb(db);
-    res.status(201).json(newEvent);
   });
 
   // Update / Republish event
-  app.put("/api/scientific-events/:id", (req, res) => {
-    const { id } = req.params;
-    if (!db.events) return res.status(404).json({ error: "No events found" });
-    const existingIndex = db.events.findIndex((e: any) => e.id === id);
-    if (existingIndex === -1) return res.status(404).json({ error: "Event not found" });
+  app.put("/api/scientific-events/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      const updatePayload: any = {};
+      const fieldsToSnake: Record<string, string> = {
+        title: "title", organizer: "organizer", scope: "scope", eventType: "event_type", 
+        targetProfessions: "target_professions", startDate: "start_date", endDate: "end_date", 
+        duration: "duration", venue: "venue", city: "city", state: "state", country: "country", 
+        institution: "institution", format: "format", specialties: "specialties", cmeCredits: "cme_credits", 
+        cmeAccreditationBody: "cme_accreditation_body", description: "description", objectives: "objectives", 
+        abstractDeadline: "abstract_deadline", registrationDeadline: "registration_deadline", 
+        earlyBirdDeadline: "early_bird_deadline", earlyBirdCost: "early_bird_cost", cost: "cost", 
+        seatsAvailable: "seats_available", seatsLeft: "seats_left", status: "status", imageUrl: "image_url", 
+        posterUrl: "poster_url", keynoteSpeakers: "keynote_speakers", speakerProfiles: "speaker_profiles", 
+        schedule: "schedule", registrationUrl: "registration_url", submissionUrl: "submission_url", 
+        certificateUrl: "certificate_url", souvenirUrl: "souvenir_url", webpageImage: "webpage_image", 
+        slug: "slug", organizerWebsite: "organizer_website", faqs: "faqs", viewsCount: "views_count", 
+        registrationsCount: "registrations_count", rating: "rating", aiSummary: "ai_summary"
+      };
 
-    const updatedEvent = {
-      ...db.events[existingIndex],
-      ...req.body,
-      id
-    };
+      for (const [camelKey, snakeKey] of Object.entries(fieldsToSnake)) {
+        if (req.body[camelKey] !== undefined) {
+          updatePayload[snakeKey] = req.body[camelKey];
+        }
+      }
 
-    db.events[existingIndex] = updatedEvent;
-    saveDb(db);
-    res.json(updatedEvent);
+      const { data, error } = await supabaseAdmin.from('scientific_events').update(updatePayload).eq('id', id).select();
+      if (error) throw error;
+      if (!data || data.length === 0) return res.status(404).json({ error: "Event not found" });
+      res.json(data[0]);
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
   });
 
   // Delete event
-  app.delete("/api/scientific-events/:id", (req, res) => {
-    const { id } = req.params;
-    if (!db.events) return res.status(404).json({ error: "No events found" });
-    db.events = db.events.filter(e => e.id !== id);
-    saveDb(db);
-    res.json({ success: true, message: "Event removed successfully" });
+  app.delete("/api/scientific-events/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { error } = await supabaseAdmin.from('scientific_events').delete().eq('id', id);
+      if (error) throw error;
+      res.json({ success: true, message: "Event removed successfully" });
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
   });
 
   // Approve / Reject Event (Admin)
-  app.patch("/api/admin/scientific-events/:id/status", (req, res) => {
-    const { id } = req.params;
-    const { status } = req.body;
-    const event = db.events?.find(e => e.id === id);
-    if (!event) return res.status(404).json({ error: "Event not found" });
-    event.status = status;
-    saveDb(db);
-    res.json(event);
+  app.patch("/api/admin/scientific-events/:id/status", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { status } = req.body;
+      const { data, error } = await supabaseAdmin.from('scientific_events').update({ status }).eq('id', id).select();
+      if (error) throw error;
+      if (!data || data.length === 0) return res.status(404).json({ error: "Event not found" });
+      res.json(data[0]);
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
   });
 
   // Google Cloud Storage Uploaded Images API
@@ -564,7 +625,7 @@ async function startServer() {
   });
 
   // POST Generate AI Weekly News Batch (Treatment Update, Scientific Events, Pharma and Drugs, Hospital Intelligence, Current Guidelines)
-  app.post("/api/admin/generate-weekly-batch", (req, res) => {
+  app.post("/api/admin/generate-weekly-batch", async (req, res) => {
     const currentDb = loadDb();
     if (!currentDb.generatedWeeks) {
       currentDb.generatedWeeks = {};
@@ -585,7 +646,7 @@ async function startServer() {
 
     const nowIso = new Date().toISOString();
 
-    newSectionsToGenerate.forEach((section: string) => {
+    for (const section of newSectionsToGenerate) {
       if (section === "Treatment Update") {
         const newArt = {
           id: "tu-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4),
@@ -594,61 +655,64 @@ async function startServer() {
           category: "Clinical",
           specialties: ["General Medicine", "Pharmacology", "Cardiology"],
           region: "Global Healthcare",
-          imageUrl: "https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?auto=format&fit=crop&w=800&q=80",
-          imageCredit: "HealicWire Special Page Engine",
-          sourceName: "HealicWire Special Page Engine",
-          readingTimeMinutes: 4,
-          summary30s: `Official evidence-based treatment protocol update and dosage guidance published for ${selectedWeek}.`,
-          bodyAnalysis: `CLINICAL TREATMENT PROTOCOL UPDATE:\n\n1. Evidence Summary:\nRevised therapeutic guidelines issued for active clinical practice during ${selectedWeek}.\n\n2. Key Prescribing Directives:\n- Follow updated titration schedules for high-risk patient cohorts.\n- Audit renal and hepatic markers at baseline and 4-week milestones.\n- Ensure multidisciplinary care coordination.`,
-          clinicalImpactScore: 9,
-          impactScores: { clinicalPractice: 5, publicHealth: 4, innovation: 4, costEffectiveness: 4 },
+          image_url: "https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?auto=format&fit=crop&w=800&q=80",
+          image_credit: "HealicWire Special Page Engine",
+          source_name: "HealicWire Special Page Engine",
+          reading_time_minutes: 4,
+          summary_30s: `Official evidence-based treatment protocol update and dosage guidance published for ${selectedWeek}.`,
+          body_analysis: `CLINICAL TREATMENT PROTOCOL UPDATE:\n\n1. Evidence Summary:\nRevised therapeutic guidelines issued for active clinical practice during ${selectedWeek}.\n\n2. Key Prescribing Directives:\n- Follow updated titration schedules for high-risk patient cohorts.\n- Audit renal and hepatic markers at baseline and 4-week milestones.\n- Ensure multidisciplinary care coordination.`,
+          clinical_impact_score: 9,
+          impact_scores: { clinicalPractice: 5, publicHealth: 4, innovation: 4, costEffectiveness: 4 },
           status: "published",
-          publishedAt: nowIso,
-          views: 120
+          published_at: nowIso,
+          views: 120,
+          slug: `treatment-update-${selectedWeek.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+          source_url: "#"
         };
-        currentDb.articles.unshift(newArt as any);
+        await supabaseAdmin.from('articles').insert([newArt]);
       } else if (section === "Scientific Events") {
         const newEvtArt = {
-          id: "evt-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4),
+          id: "evt-art-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4),
           headline: `Scientific Events: National Medical & Clinical Summit (${selectedWeek})`,
           subhead: "Keynote lectures, CME accredited workshops, and multi-specialty clinical research presentations.",
           category: "Scientific Events",
           specialties: ["Internal Medicine", "Medical Education", "Research"],
           region: "Global Healthcare",
-          imageUrl: "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=800&q=80",
-          imageCredit: "HealicWire Special Page Engine",
-          sourceName: "HealicWire Special Page Engine",
-          readingTimeMinutes: 5,
-          summary30s: `National scientific summit accredited for 12 CME Hours, presenting groundbreaking clinical research during ${selectedWeek}.`,
-          bodyAnalysis: `NATIONAL SCIENTIFIC SYMPOSIUM DETAILS:\n\nOrganized by HealicWire Academic Directorate for ${selectedWeek}.\n\nHighlights:\n- Accredited for 12 CME Hours.\n- Interactive Q&A and hands-on workshops.`,
-          clinicalImpactScore: 9,
-          impactScores: { clinicalPractice: 5, publicHealth: 4, innovation: 4, costEffectiveness: 4 },
+          image_url: "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=800&q=80",
+          image_credit: "HealicWire Special Page Engine",
+          source_name: "HealicWire Special Page Engine",
+          reading_time_minutes: 5,
+          summary_30s: `National scientific summit accredited for 12 CME Hours, presenting groundbreaking clinical research during ${selectedWeek}.`,
+          body_analysis: `NATIONAL SCIENTIFIC SYMPOSIUM DETAILS:\n\nOrganized by HealicWire Academic Directorate for ${selectedWeek}.\n\nHighlights:\n- Accredited for 12 CME Hours.\n- Interactive Q&A and hands-on workshops.`,
+          clinical_impact_score: 9,
+          impact_scores: { clinicalPractice: 5, publicHealth: 4, innovation: 4, costEffectiveness: 4 },
           status: "published",
-          publishedAt: nowIso,
-          views: 180
+          published_at: nowIso,
+          views: 180,
+          slug: `scientific-events-${selectedWeek.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+          source_url: "#"
         };
-        currentDb.articles.unshift(newEvtArt as any);
+        await supabaseAdmin.from('articles').insert([newEvtArt]);
 
-        if (currentDb.events) {
-          currentDb.events.unshift({
-            id: newEvtArt.id,
-            title: newEvtArt.headline,
-            organizer: "HealicWire Academic Directorate",
-            scope: "Nationwide",
-            eventType: "Conference",
-            startDate: nowIso.split("T")[0],
-            endDate: nowIso.split("T")[0],
-            venue: "Main Medical Auditorium & Virtual Stream",
-            city: "New Delhi",
-            country: "India",
-            format: "Hybrid",
-            specialties: ["Internal Medicine", "Cardiology"],
-            cmeCredits: 12,
-            description: newEvtArt.summary30s,
-            cost: "Complimentary / CME Accredited",
-            registrationUrl: "#"
-          });
-        }
+        const newEvt = {
+          id: "evt-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4),
+          title: newEvtArt.headline,
+          organizer: "HealicWire Academic Directorate",
+          scope: "Nationwide",
+          event_type: "Conference",
+          start_date: nowIso.split("T")[0],
+          end_date: nowIso.split("T")[0],
+          venue: "Main Medical Auditorium & Virtual Stream",
+          city: "New Delhi",
+          country: "India",
+          format: "Hybrid",
+          specialties: ["Internal Medicine", "Cardiology"],
+          cme_credits: 12,
+          description: newEvtArt.summary_30s,
+          cost: "Complimentary / CME Accredited",
+          registration_url: "#"
+        };
+        await supabaseAdmin.from('scientific_events').insert([newEvt]);
       } else if (section === "Pharma and Drugs") {
         const newPharma = {
           id: "pharma-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4),
@@ -657,54 +721,48 @@ async function startServer() {
           category: "Pharma and Drugs",
           specialties: ["Pharmacology", "Pharma and Drugs", "Internal Medicine"],
           region: "Global Healthcare",
-          imageUrl: "https://images.unsplash.com/photo-1471864190281-a93a3070b6de?auto=format&fit=crop&w=800&q=80",
-          imageCredit: "HealicWire Special Page Engine",
-          sourceName: "HealicWire Special Page Engine",
-          readingTimeMinutes: 3,
-          summary30s: `Detailed breakdown of newly approved drug formulations and safety advisories published during ${selectedWeek}.`,
-          bodyAnalysis: `PHARMA & DRUGS REGULATORY UPDATE:\n\nDetailed breakdown of newly approved drug formulations and CDSCO safety advisories published during ${selectedWeek}.\n\n- Updated bioequivalence parameters for oral formulations.\n- Mandatory black box warning notifications for novel antidiabetic agents.`,
-          clinicalImpactScore: 9,
-          impactScores: { clinicalPractice: 5, publicHealth: 4, innovation: 4, costEffectiveness: 4 },
+          image_url: "https://images.unsplash.com/photo-1471864190281-a93a3070b6de?auto=format&fit=crop&w=800&q=80",
+          image_credit: "HealicWire Special Page Engine",
+          source_name: "HealicWire Special Page Engine",
+          reading_time_minutes: 3,
+          summary_30s: `Detailed breakdown of newly approved drug formulations and safety advisories published during ${selectedWeek}.`,
+          body_analysis: `PHARMA & DRUGS REGULATORY UPDATE:\n\nDetailed breakdown of newly approved drug formulations and CDSCO safety advisories published during ${selectedWeek}.\n\n- Updated bioequivalence parameters for oral formulations.\n- Mandatory black box warning notifications for novel antidiabetic agents.`,
+          clinical_impact_score: 9,
+          impact_scores: { clinicalPractice: 5, publicHealth: 4, innovation: 4, costEffectiveness: 4 },
           status: "published",
-          publishedAt: nowIso,
-          views: 145
+          published_at: nowIso,
+          views: 145,
+          slug: `pharma-${selectedWeek.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+          source_url: "#"
         };
-        currentDb.articles.unshift(newPharma as any);
+        await supabaseAdmin.from('articles').insert([newPharma]);
       } else if (section === "Hospital Intelligence") {
         const newAlert = {
           id: "alert-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4),
           headline: `Hospital Intelligence: Emergency Care & Infection Control Protocol (${selectedWeek})`,
           severity: "URGENT",
-          summary: `Urgent hospital operational guidelines and infection control standards issued for ${selectedWeek}.`,
-          impactArea: "Emergency Medicine & ICU Operations",
-          affectedSpecialties: ["Emergency Medicine", "Infectious Diseases", "Critical Care"],
-          recommendedActions: [
-            "Audit personal protective equipment stocks across all ICU units.",
-            "Verify compliance with revised triage protocols.",
-            "Ensure emergency protocol staff briefings are completed by end of week."
-          ],
-          sourceName: "HealicWire Clinical Intelligence Directorate",
-          publishedAt: nowIso
+          urgency: "Immediate",
+          recommended_action: `Urgent hospital operational guidelines and infection control standards issued for ${selectedWeek}.`,
+          departments_affected: ["Emergency Medicine", "Infectious Diseases", "Critical Care"],
+          source: "HealicWire Clinical Intelligence Directorate",
+          date: nowIso.split("T")[0]
         };
-        if (!currentDb.alerts) currentDb.alerts = [];
-        currentDb.alerts.unshift(newAlert as any);
+        await supabaseAdmin.from('hospital_alerts').insert([newAlert]);
       } else if (section === "Current Guidelines") {
         const newGuideline = {
           id: "guide-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4),
           condition: `Current Guidelines: Clinical Practice Protocol (${selectedWeek})`,
-          issuingOrganization: "HealicWire Clinical Evidence Directorate",
-          lastUpdated: nowIso.split("T")[0],
-          currentRecommendation: "Mandatory implementation of revised screening algorithms and patient safety monitoring standards.",
-          previousRecommendation: "Standard empirical treatment based on conventional clinical thresholds.",
-          summaryOfEvidence: `Meta-analysis of clinical trial outcomes demonstrating 28% reduction in hospital readmissions with revised algorithms (${selectedWeek}).`,
-          strengthOfRecommendation: "Strong (High-Quality Evidence)",
-          specialty: "General Medicine",
-          guidelineUrl: "#"
+          issuing_organization: "HealicWire Clinical Evidence Directorate",
+          last_updated: nowIso.split("T")[0],
+          current_recommendation: "Mandatory implementation of revised screening algorithms and patient safety monitoring standards.",
+          previous_recommendation: "Standard empirical treatment based on conventional clinical thresholds.",
+          reason_for_change: `Meta-analysis of clinical trial outcomes demonstrating 28% reduction in hospital readmissions with revised algorithms (${selectedWeek}).`,
+          india_relevance: "Strong (High-Quality Evidence)",
+          "references": []
         };
-        if (!currentDb.guidelines) currentDb.guidelines = [];
-        currentDb.guidelines.unshift(newGuideline as any);
+        await supabaseAdmin.from('living_guidelines').insert([newGuideline]);
       }
-    });
+    }
 
     // Mark sections as generated for this week
     currentDb.generatedWeeks[selectedWeek] = Array.from(
@@ -726,11 +784,12 @@ async function startServer() {
   app.post("/api/scientific-events/:id/ai-assistant", async (req, res) => {
     const { id } = req.params;
     const { question } = req.body;
-    const event = db.events?.find(e => e.id === id);
-
-    if (!event) {
+    
+    const { data: events, error } = await supabaseAdmin.from('scientific_events').select('*').eq('id', id);
+    if (error || !events || events.length === 0) {
       return res.status(404).json({ error: "Event not found" });
     }
+    const event = events[0];
 
     try {
       const ai = getGeminiClient();
@@ -742,8 +801,8 @@ async function startServer() {
       - Organizer: ${event.organizer}
       - Venue: ${event.venue}, ${event.city}, ${event.country}
       - Specialties: ${event.specialties.join(", ")}
-      - CME Credits: ${event.cmeCredits}
-      - Speakers: ${event.keynoteSpeakers?.join(", ") || "Invited Faculty"}
+      - CME Credits: ${event.cme_credits}
+      - Speakers: ${event.keynote_speakers?.join(", ") || "Invited Faculty"}
       - Description: ${event.description}
       - Schedule: ${JSON.stringify(event.schedule || [])}
       - Objectives: ${JSON.stringify(event.objectives || [])}
@@ -773,11 +832,12 @@ async function startServer() {
   // AI Event Summary & Notes Generator endpoint
   app.post("/api/scientific-events/:id/ai-summary", async (req, res) => {
     const { id } = req.params;
-    const event = db.events?.find(e => e.id === id);
-
-    if (!event) {
+    
+    const { data: events, error } = await supabaseAdmin.from('scientific_events').select('*').eq('id', id);
+    if (error || !events || events.length === 0) {
       return res.status(404).json({ error: "Event not found" });
     }
+    const event = events[0];
 
     try {
       const ai = getGeminiClient();
@@ -810,8 +870,9 @@ async function startServer() {
       });
 
       const summaryData = JSON.parse(response.text?.trim() || "{}");
-      event.aiSummary = summaryData;
-      saveDb(db);
+      
+      const { error: updateError } = await supabaseAdmin.from('scientific_events').update({ ai_summary: summaryData }).eq('id', id);
+      if (updateError) throw updateError;
 
       res.json(summaryData);
     } catch (error: any) {
@@ -821,21 +882,27 @@ async function startServer() {
   });
 
   // Add living guideline
-  app.post("/api/admin/living-guidelines", (req, res) => {
-    const newGuideline: LivingGuideline = {
-      id: "g-" + Date.now(),
-      condition: req.body.condition,
-      issuingOrganization: req.body.issuingOrganization,
-      currentRecommendation: req.body.currentRecommendation,
-      previousRecommendation: req.body.previousRecommendation,
-      lastUpdated: new Date().toISOString().split("T")[0],
-      reasonForChange: req.body.reasonForChange,
-      indiaRelevance: req.body.indiaRelevance,
-      references: req.body.references || []
-    };
-    db.guidelines.push(newGuideline);
-    saveDb(db);
-    res.status(201).json(newGuideline);
+  app.post("/api/admin/living-guidelines", async (req, res) => {
+    try {
+      const payload = {
+        id: "g-" + Date.now(),
+        condition: req.body.condition,
+        issuing_organization: req.body.issuingOrganization,
+        current_recommendation: req.body.currentRecommendation,
+        previous_recommendation: req.body.previousRecommendation,
+        last_updated: new Date().toISOString().split("T")[0],
+        reason_for_change: req.body.reasonForChange,
+        india_relevance: req.body.indiaRelevance,
+        "references": req.body.references || []
+      };
+      
+      const { data, error } = await supabaseAdmin.from('living_guidelines').insert([payload]).select();
+      if (error) throw error;
+      res.status(201).json(data[0]);
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
   });
 
   // Get hospital alerts
@@ -844,74 +911,106 @@ async function startServer() {
   });
 
   // Add hospital alert
-  app.post("/api/admin/hospital-alerts", (req, res) => {
-    const newAlert: HospitalAlert = {
-      id: "al-" + Date.now(),
-      headline: req.body.headline,
-      severity: req.body.severity || ImpactSeverity.INFORMATIONAL,
-      urgency: req.body.urgency || "Routine",
-      departmentsAffected: req.body.departmentsAffected || [],
-      recommendedAction: req.body.recommendedAction,
-      source: req.body.source || "Internal Administration",
-      date: new Date().toISOString().split("T")[0]
-    };
-    db.alerts.unshift(newAlert);
-    saveDb(db);
-    res.status(201).json(newAlert);
+  app.post("/api/admin/hospital-alerts", async (req, res) => {
+    try {
+      const payload = {
+        id: "al-" + Date.now(),
+        headline: req.body.headline,
+        severity: req.body.severity || ImpactSeverity.INFORMATIONAL,
+        urgency: req.body.urgency || "Routine",
+        departments_affected: req.body.departmentsAffected || [],
+        recommended_action: req.body.recommendedAction,
+        source: req.body.source || "Internal Administration",
+        date: new Date().toISOString().split("T")[0]
+      };
+      
+      const { data, error } = await supabaseAdmin.from('hospital_alerts').insert([payload]).select();
+      if (error) throw error;
+      res.status(201).json(data[0]);
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
   });
 
   // Submit correction report
-  app.post("/api/corrections", (req, res) => {
-    const newCorrection = {
-      id: "corr-" + Date.now(),
-      articleId: req.body.articleId,
-      articleHeadline: req.body.articleHeadline,
-      reportedBy: req.body.reportedBy || "Anonymous",
-      description: req.body.description,
-      status: "pending",
-      createdAt: new Date().toISOString()
-    };
-    db.corrections.push(newCorrection);
-    saveDb(db);
-    res.status(201).json(newCorrection);
+  app.post("/api/corrections", async (req, res) => {
+    try {
+      const payload = {
+        id: "corr-" + Date.now(),
+        article_id: req.body.articleId,
+        article_headline: req.body.articleHeadline,
+        reported_by: req.body.reportedBy || "Anonymous",
+        description: req.body.description,
+        status: "pending",
+        created_at: new Date().toISOString()
+      };
+      
+      const { data, error } = await supabaseAdmin.from('correction_reports').insert([payload]).select();
+      if (error) throw error;
+      res.status(201).json(data[0]);
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
   });
 
   // Get corrections list (Admin)
-  app.get("/api/admin/corrections", (req, res) => {
-    res.json(db.corrections);
+  app.get("/api/admin/corrections", async (req, res) => {
+    try {
+      const { data, error } = await supabaseAdmin.from('correction_reports').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      res.json(data);
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
   });
 
   // Update correction status
-  app.patch("/api/admin/corrections/:id", (req, res) => {
-    const { id } = req.params;
-    const index = db.corrections.findIndex(c => c.id === id);
-    if (index === -1) {
-      return res.status(404).json({ error: "Correction report not found" });
+  app.patch("/api/admin/corrections/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { data, error } = await supabaseAdmin.from('correction_reports').update({ status: req.body.status }).eq('id', id).select();
+      if (error) throw error;
+      if (!data || data.length === 0) return res.status(404).json({ error: "Correction report not found" });
+      res.json(data[0]);
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
     }
-    db.corrections[index].status = req.body.status;
-    saveDb(db);
-    res.json(db.corrections[index]);
   });
 
   // Subscribe to newsletter
-  app.post("/api/newsletter/subscribe", (req, res) => {
-    const { email, specialty, frequency } = req.body;
-    if (!email) {
-      return res.status(400).json({ error: "Email is required" });
+  app.post("/api/newsletter/subscribe", async (req, res) => {
+    try {
+      const { email, specialty, frequency } = req.body;
+      if (!email) {
+        return res.status(400).json({ error: "Email is required" });
+      }
+      
+      const { data: existing, error: findError } = await supabaseAdmin.from('newsletter_subscribers').select('id').eq('email', email);
+      if (findError) throw findError;
+      
+      if (existing && existing.length > 0) {
+        return res.json({ message: "You are already subscribed!" });
+      }
+      
+      const payload = {
+        email,
+        specialty: specialty || "General Practice",
+        frequency: frequency || "weekly",
+        created_at: new Date().toISOString()
+      };
+      
+      const { error } = await supabaseAdmin.from('newsletter_subscribers').insert([payload]);
+      if (error) throw error;
+      
+      res.status(201).json({ success: true, message: "Subscription successful!" });
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
     }
-    const alreadySubbed = db.subscribers.some(s => s.email.toLowerCase() === email.toLowerCase());
-    if (alreadySubbed) {
-      return res.json({ message: "You are already subscribed!" });
-    }
-    const newSub = {
-      email,
-      specialty: specialty || "General Practice",
-      frequency: frequency || "weekly",
-      createdAt: new Date().toISOString()
-    };
-    db.subscribers.push(newSub);
-    saveDb(db);
-    res.status(201).json({ success: true, message: "Subscription successful!" });
   });
 
   // --- AI BASED POWERED ENDPOINTS ---
@@ -983,7 +1082,7 @@ async function startServer() {
       const result = JSON.parse(response.text?.trim() || "{}");
 
       // Auto-assign properties
-      const ingestedArticle: Article = {
+      const payload = {
         id: "art-" + Date.now(),
         slug: result.headline.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""),
         headline: result.headline,
@@ -991,29 +1090,29 @@ async function startServer() {
         category: result.category || "Clinical",
         specialties: result.specialties || [],
         region: result.region || Region.GLOBAL,
-        imageUrl: "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=800&q=80",
-        imageCredit: `${result.sourceName} Official Media`,
-        imageType: "AI-generated illustration",
-        publishedAt: new Date().toISOString(),
-        sourcePublishedAt: new Date().toISOString(),
-        readingTimeMinutes: Math.max(2, Math.ceil((result.bodyAnalysis || "").split(" ").length / 200)),
+        image_url: "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=800&q=80",
+        image_credit: `${result.sourceName} Official Media`,
+        image_type: "AI-generated illustration",
+        published_at: new Date().toISOString(),
+        source_published_at: new Date().toISOString(),
+        reading_time_minutes: Math.max(2, Math.ceil((result.bodyAnalysis || "").split(" ").length / 200)),
         status: "ingested", // Queue for editor review first!
-        sourceName: result.sourceName || "Official Source",
-        sourceUrl: result.sourceUrl || "#",
-        evidenceLevel: result.evidenceLevel || EvidenceLevel.RCT,
-        isAiAssisted: true,
-        summary30s: result.summary30s || "",
-        summary2min: result.summary2min || "",
-        bodyAnalysis: result.bodyAnalysis || "",
-        whyThisMatters: result.whyThisMatters || {
+        source_name: result.sourceName || "Official Source",
+        source_url: result.sourceUrl || "#",
+        evidence_level: result.evidenceLevel || EvidenceLevel.RCT,
+        is_ai_assisted: true,
+        summary_30s: result.summary30s || "",
+        summary_2min: result.summary2min || "",
+        body_analysis: result.bodyAnalysis || "",
+        why_this_matters: result.whyThisMatters || {
           clinicians: "Clinical review required.",
           students: "High-yield details.",
           hospitalAdministrators: "Operational updates.",
           patients: "Patient safety info.",
           researchers: "Research review."
         },
-        whatChanged: result.whatChanged,
-        impactScores: {
+        what_changed: result.whatChanged,
+        impact_scores: {
           clinicalPractice: 4,
           medicalEducation: 3,
           research: 3,
@@ -1021,24 +1120,24 @@ async function startServer() {
           hospitalOperations: 3,
           patientCare: 4
         },
-        indiaRelevance: result.indiaRelevance || {
+        india_relevance: result.indiaRelevance || {
           status: "Directly applicable",
           explanation: "Widespread application."
         },
-        peerReviewed: result.peerReviewed !== undefined ? result.peerReviewed : true,
-        fundingSource: result.fundingSource || "Public funding",
-        coiNote: result.coiNote || "None declared",
-        studyDesign: result.studyDesign,
-        sampleSize: result.sampleSize,
-        references: result.references || [],
+        peer_reviewed: result.peerReviewed !== undefined ? result.peerReviewed : true,
+        funding_source: result.fundingSource || "Public funding",
+        coi_note: result.coiNote || "None declared",
+        study_design: result.studyDesign,
+        sample_size: result.sampleSize,
+        "references": result.references || [],
         views: 0
       };
 
-      // Push to ingested queue
-      db.articles.push(ingestedArticle);
-      saveDb(db);
+      // Push to Supabase ingested queue
+      const { data, error } = await supabaseAdmin.from('articles').insert([payload]).select();
+      if (error) throw error;
 
-      res.json({ success: true, article: ingestedArticle });
+      res.json({ success: true, article: data[0] });
     } catch (error: any) {
       console.error("AI Based news ingestion failed:", error);
       res.status(500).json({ error: "AI Based news ingestion failed", details: error.message });
@@ -1050,10 +1149,11 @@ async function startServer() {
     const { id } = req.params;
     const { question, history } = req.body;
 
-    const article = db.articles.find(a => a.id === id);
-    if (!article) {
+    const { data: articles, error } = await supabaseAdmin.from('articles').select('*').eq('id', id);
+    if (error || !articles || articles.length === 0) {
       return res.status(404).json({ error: "Article not found" });
     }
+    const article = articles[0];
 
     try {
       const ai = getGeminiClient();
@@ -1067,16 +1167,16 @@ async function startServer() {
       Subhead: ${article.subhead}
       Category: ${article.category}
       Specialties: ${article.specialties.join(", ")}
-      Evidence Level: ${article.evidenceLevel}
-      30-Second Summary: ${article.summary30s}
-      2-Minute Summary: ${article.summary2min}
-      Detailed Analysis: ${article.bodyAnalysis}
-      Clinician Impact: ${article.whyThisMatters.clinicians}
-      Student Impact: ${article.whyThisMatters.students}
-      Hospital Admin Impact: ${article.whyThisMatters.hospitalAdministrators}
-      Patient Impact: ${article.whyThisMatters.patients}
-      Researcher Impact: ${article.whyThisMatters.researchers}
-      India Relevance: ${article.indiaRelevance.status} - ${article.indiaRelevance.explanation}
+      Evidence Level: ${article.evidence_level}
+      30-Second Summary: ${article.summary_30s}
+      2-Minute Summary: ${article.summary_2min}
+      Detailed Analysis: ${article.body_analysis}
+      Clinician Impact: ${article.why_this_matters?.clinicians}
+      Student Impact: ${article.why_this_matters?.students}
+      Hospital Admin Impact: ${article.why_this_matters?.hospitalAdministrators}
+      Patient Impact: ${article.why_this_matters?.patients}
+      Researcher Impact: ${article.why_this_matters?.researchers}
+      India Relevance: ${article.india_relevance?.status} - ${article.india_relevance?.explanation}
       --- END CONTEXT ---
       
       Answer ONLY based on the cited article, linked official guidelines, or approved references provided.
@@ -1123,10 +1223,11 @@ async function startServer() {
   // 3. AI Claim Fact-Checker & Verifier
   app.post("/api/articles/:id/verify", async (req, res) => {
     const { id } = req.params;
-    const article = db.articles.find(a => a.id === id);
-    if (!article) {
+    const { data: articles, error } = await supabaseAdmin.from('articles').select('*').eq('id', id);
+    if (error || !articles || articles.length === 0) {
       return res.status(404).json({ error: "Article not found" });
     }
+    const article = articles[0];
 
     try {
       const ai = getGeminiClient();
@@ -1136,8 +1237,8 @@ async function startServer() {
       Analyze the clinical claims made in the following medical article:
       
       Title: ${article.headline}
-      Brief Summary: ${article.summary30s}
-      Detailed Analysis: ${article.bodyAnalysis}
+      Brief Summary: ${article.summary_30s}
+      Detailed Analysis: ${article.body_analysis}
       
       Extract up to 3 major medical or health claims and verify them against globally trusted sources like WHO, CDC, FDA, EMA, NICE, Cochrane, or ICMR.
       For each claim, provide:
@@ -1167,11 +1268,8 @@ async function startServer() {
       const claims = JSON.parse(response.text?.trim() || "[]");
       
       // Save results to the article in DB for persistence
-      const index = db.articles.findIndex(a => a.id === id);
-      if (index !== -1) {
-        db.articles[index].factCheckClaims = claims;
-        saveDb(db);
-      }
+      const { error: updateError } = await supabaseAdmin.from('articles').update({ fact_check_claims: claims }).eq('id', id);
+      if (updateError) throw updateError;
 
       res.json(claims);
     } catch (error: any) {
@@ -1183,10 +1281,11 @@ async function startServer() {
   // 4. News-To-Learning Dynamic Quiz Generator
   app.post("/api/articles/:id/quiz", async (req, res) => {
     const { id } = req.params;
-    const article = db.articles.find(a => a.id === id);
-    if (!article) {
+    const { data: articles, error } = await supabaseAdmin.from('articles').select('*').eq('id', id);
+    if (error || !articles || articles.length === 0) {
       return res.status(404).json({ error: "Article not found" });
     }
+    const article = articles[0];
 
     try {
       const ai = getGeminiClient();
@@ -1197,8 +1296,8 @@ async function startServer() {
       Headline: ${article.headline}
       Category: ${article.category}
       Specialties: ${article.specialties.join(", ")}
-      Summary: ${article.summary2min}
-      Detailed Analysis: ${article.bodyAnalysis}
+      Summary: ${article.summary_2min}
+      Detailed Analysis: ${article.body_analysis}
       
       Generate:
       1. A 'oneMinuteRevision' key - summarizing the key clinical pearls of this development.
@@ -1266,11 +1365,8 @@ async function startServer() {
       learningModule.vivaQuestions = learningModule.vivaQuestions.map((vq: any, i: number) => ({ ...vq, id: `vq-${Date.now()}-${i}` }));
 
       // Save to DB
-      const index = db.articles.findIndex(a => a.id === id);
-      if (index !== -1) {
-        db.articles[index].learningModule = learningModule;
-        saveDb(db);
-      }
+      const { error: updateError } = await supabaseAdmin.from('articles').update({ learning_module: learningModule }).eq('id', id);
+      if (updateError) throw updateError;
 
       res.json(learningModule);
     } catch (error: any) {

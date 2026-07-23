@@ -10,6 +10,7 @@ import {
   Sparkles, Layers, FileText, Check, ShieldCheck, AlertTriangle
 } from "lucide-react";
 import { ScientificEvent } from "../types";
+import { supabase, mapEventFromDB } from "../lib/supabase";
 
 interface ScientificEventPageProps {
   slug: string;
@@ -34,27 +35,28 @@ export default function ScientificEventPage({ slug, onBack }: ScientificEventPag
 
   useEffect(() => {
     setLoading(true);
-    fetch("/api/scientific-events")
-      .then(res => res.json())
-      .then((data: ScientificEvent[]) => {
-        const found = data.find(e => 
-          (e.slug && e.slug.toLowerCase() === slug.toLowerCase()) || 
-          e.id === slug ||
-          e.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").includes(slug.toLowerCase())
-        );
-        if (found) {
-          setEvent(found);
-        } else {
-          // Fallback to first available event if matching slug loading mock
-          setEvent(data[0] || null);
+    const fetchEvent = async () => {
+      try {
+        const { data, error } = await supabase.from('scientific_events').select('*');
+        if (error) throw error;
+        
+        if (data) {
+          const mapped = data.map(mapEventFromDB);
+          const found = mapped.find(e => 
+            (e.slug && e.slug.toLowerCase() === slug.toLowerCase()) || 
+            e.id === slug ||
+            e.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").includes(slug.toLowerCase())
+          );
+          setEvent(found || mapped[0] || null);
         }
-        setLoading(false);
-      })
-      .catch(err => {
+      } catch (err) {
         console.error(err);
         setError("Failed to load event page details.");
+      } finally {
         setLoading(false);
-      });
+      }
+    };
+    fetchEvent();
   }, [slug]);
 
   if (loading) {

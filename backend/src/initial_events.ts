@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { ScientificEvent } from "./types";
+import { ScientificEvent } from "./types.js";
 
 export const initialEvents: ScientificEvent[] = [
   // LOCAL EVENTS (Priority 1)

@@ -6,6 +6,7 @@
 import React, { useState, useEffect } from "react";
 import { ShieldAlert, AlertTriangle, Info, BellRing, Filter, Clock, MapPin, CheckCircle, Plus, Send } from "lucide-react";
 import { HospitalAlert, ImpactSeverity } from "../types";
+import { supabase, mapAlertFromDB } from "../lib/supabase";
 import { authFetch } from "../lib/api";
 
 export default function HospitalIntelligence() {
@@ -28,17 +29,22 @@ export default function HospitalIntelligence() {
     fetchAlerts();
   }, []);
 
-  const fetchAlerts = () => {
-    fetch("/api/hospital-alerts")
-      .then(res => res.json())
-      .then(data => {
-        setAlerts(data);
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error("Error fetching hospital alerts:", err);
-        setLoading(false);
-      });
+  const fetchAlerts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('hospital_alerts')
+        .select('*')
+        .order('date', { ascending: false });
+      
+      if (error) throw error;
+      if (data) {
+        setAlerts(data.map(mapAlertFromDB));
+      }
+    } catch (err) {
+      console.error("Error fetching hospital alerts:", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSubmitAlert = (e: React.FormEvent) => {

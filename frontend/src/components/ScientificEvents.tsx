@@ -11,6 +11,7 @@ import {
   Send, ThumbsUp, Star, ShieldCheck, Download, Trash2, Check, ArrowRight, Compass, Users
 } from "lucide-react";
 import { ScientificEvent, EventRegistration, LiveQnAItem, AiSummaryData } from "../types";
+import { supabase, mapEventFromDB, mapArticleFromDB } from "../lib/supabase";
 
 export default function ScientificEvents() {
   const [events, setEvents] = useState<ScientificEvent[]>([]);
@@ -83,37 +84,41 @@ export default function ScientificEvents() {
   const [portalEvents, setPortalEvents] = useState<any[]>([]);
 
   // Fetch events from backend API
-  const fetchEvents = () => {
+  const fetchEvents = async () => {
     setLoading(true);
-    fetch("/api/scientific-events")
-      .then(res => {
-        if (!res.ok) throw new Error("Failed to load events database");
-        return res.json();
-      })
-      .then(data => {
-        setEvents(data);
-        setLoading(false);
-      })
-      .catch(err => {
-        setError(err.message);
-        setLoading(false);
-      });
-
-    fetch("/api/articles?status=all")
-      .then(res => res.json())
-      .then(data => {
-        const generated = data.filter((a: any) =>
-          (a.sourceName === "HealicWire Special Page Engine" || a.isPortalPage === true || a.headline.startsWith("Scientific Events:")) &&
-          !a.headline.startsWith("Treatment Update:") &&
-          a.category !== "Pharma and Drugs"
-        );
-        setPortalEvents(generated);
-      })
-      .catch(err => console.error(err));
+    try {
+      const { data, error } = await supabase
+        .from('scientific_events')
+        .select('*');
+      if (error) throw error;
+      if (data) setEvents(data.map(mapEventFromDB));
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
     fetchEvents();
+    // Fetch portal events
+    const fetchPortalEvents = async () => {
+      try {
+        const { data, error } = await supabase.from('articles').select('*');
+        if (error) throw error;
+        if (data) {
+          const generated = data.filter((a: any) =>
+            (a.source_name === "HealicWire Special Page Engine" || a.headline?.startsWith("Scientific Events:")) &&
+            !a.headline?.startsWith("Treatment Update:") &&
+            a.category !== "Pharma and Drugs"
+          );
+          setPortalEvents(generated.map(mapArticleFromDB));
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    fetchPortalEvents();
   }, []);
 
   // Sync LocalStorage

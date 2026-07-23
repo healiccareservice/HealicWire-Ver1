@@ -1,1 +1,2 @@
-/api/*  https://healicwire-backend-318357497184.us-central1.run.app/:splat  200
+/api/*  https://healicwire-backend-318357497184.us-central1.run.app/api/:splat  200
+/* /index.html 200

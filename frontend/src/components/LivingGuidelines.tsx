@@ -6,6 +6,7 @@
 import { useState, useEffect } from "react";
 import { Search, Calendar, Landmark, HelpCircle, AlertCircle, ChevronDown, ChevronUp, BookOpen, ExternalLink, Sparkles } from "lucide-react";
 import { LivingGuideline } from "../types";
+import { supabase, mapGuidelineFromDB, mapArticleFromDB } from "../lib/supabase";
 
 interface LivingGuidelinesProps {
   title?: string;
@@ -21,30 +22,41 @@ export default function LivingGuidelines({ title = "Current Guidelines Registry"
   const [treatmentUpdates, setTreatmentUpdates] = useState<any[]>([]);
 
   useEffect(() => {
-    fetch("/api/living-guidelines")
-      .then(res => res.json())
-      .then(data => {
-        setGuidelines(data);
-        if (data.length > 0) {
-          setExpandedId(data[0].id); // Expand first by default
+    const fetchGuidelines = async () => {
+      try {
+        const { data, error } = await supabase.from('living_guidelines').select('*');
+        if (error) throw error;
+        if (data) {
+          const mapped = data.map(mapGuidelineFromDB);
+          setGuidelines(mapped);
+          if (mapped.length > 0) setExpandedId(mapped[0].id);
         }
-        setLoading(false);
-      })
-      .catch(err => {
+      } catch (err) {
         console.error("Error fetching guidelines:", err);
+      } finally {
         setLoading(false);
-      });
+      }
+    };
 
-    fetch("/api/articles?status=all")
-      .then(res => res.json())
-      .then(data => {
-        const tu = data.filter((a: any) =>
-          a.headline.startsWith("Treatment Update:") ||
-          (a.sourceName === "HealicWire Special Page Engine" && !a.headline.startsWith("Scientific Events:"))
-        );
-        setTreatmentUpdates(tu);
-      })
-      .catch(err => console.error(err));
+    const fetchTreatmentUpdates = async () => {
+      try {
+        const { data, error } = await supabase.from('articles').select('*');
+        if (error) throw error;
+        if (data) {
+          const mapped = data.map(mapArticleFromDB);
+          const tu = mapped.filter((a: any) =>
+            a.headline?.startsWith("Treatment Update:") ||
+            (a.sourceName === "HealicWire Special Page Engine" && !a.headline?.startsWith("Scientific Events:"))
+          );
+          setTreatmentUpdates(tu);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    fetchGuidelines();
+    fetchTreatmentUpdates();
   }, []);
 
   const filtered = guidelines.filter(g =>

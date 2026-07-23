@@ -6,6 +6,7 @@
 import React, { useState, useEffect } from "react";
 import { UserCheck, BookOpen, Search, Sparkles, ChevronDown, ChevronUp, Bookmark, BookmarkCheck, Share2, Award, Clock, ArrowRight, CheckCircle } from "lucide-react";
 import { Article } from "../types";
+import { supabase, mapArticleFromDB } from "../lib/supabase";
 
 interface EditorialsPageProps {
   onSelectArticle: (article: Article) => void;
@@ -28,24 +29,28 @@ export default function EditorialsPage({ onSelectArticle }: EditorialsPageProps)
   };
 
   useEffect(() => {
-    fetch("/api/articles?status=all")
-      .then(res => res.json())
-      .then(data => {
-        // Filter articles that belong to Editorials or Clinical/Research
-        const filtered = data.filter((a: Article) => 
-          a.sourceName === "HealicWire Editorial Board" ||
-          a.category === "Clinical" ||
-          a.category === "Research" ||
-          a.category === "Policy and Public Health" ||
-          a.headline.toLowerCase().includes("editorial")
-        );
-        setEditorials(filtered.length > 0 ? filtered : data);
-        setLoading(false);
-      })
-      .catch(err => {
+    const fetchEditorials = async () => {
+      try {
+        const { data, error } = await supabase.from('articles').select('*');
+        if (error) throw error;
+        if (data) {
+          const mapped = data.map(mapArticleFromDB);
+          const filtered = mapped.filter((a: Article) => 
+            a.sourceName === "HealicWire Editorial Board" ||
+            a.category === "Clinical" ||
+            a.category === "Research" ||
+            a.category === "Policy and Public Health" ||
+            a.headline?.toLowerCase().includes("editorial")
+          );
+          setEditorials(filtered.length > 0 ? filtered : mapped);
+        }
+      } catch (err) {
         console.error("Error loading editorials:", err);
+      } finally {
         setLoading(false);
-      });
+      }
+    };
+    fetchEditorials();
   }, []);
 
   const toggleExpand = (id: string) => {

@@ -19,7 +19,7 @@ import PortalPage from "./components/PortalPage";
 import EditorialsPage from "./components/EditorialsPage";
 import WhatWeDoSlider from "./components/WhatWeDoSlider";
 import Login from "./components/Login";
-import { supabase } from "./lib/supabase";
+import { supabase, mapArticleFromDB, mapAlertFromDB } from "./lib/supabase";
 import { Article, HospitalAlert, ImpactSeverity } from "./types";
 
 interface ErrorBoundaryProps { children: React.ReactNode; }
@@ -205,30 +205,56 @@ export default function App() {
     fetchAlerts();
   }, []);
 
-  const fetchArticles = () => {
-    fetch("/api/articles")
-      .then(res => res.json())
-      .then(data => setArticles(data))
-      .catch(err => console.error("Failed to fetch articles:", err));
+  const fetchArticles = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('articles')
+        .select('*')
+        .eq('status', 'published')
+        .order('published_at', { ascending: false });
+
+      if (error) throw error;
+      if (data) {
+        setArticles(data.map(mapArticleFromDB));
+      }
+    } catch (err) {
+      console.error("Failed to fetch articles:", err);
+    }
   };
 
-  const fetchAlerts = () => {
-    fetch("/api/hospital-alerts")
-      .then(res => res.json())
-      .then(data => setAlerts(data))
-      .catch(err => console.error("Failed to fetch alerts:", err));
+  const fetchAlerts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('hospital_alerts')
+        .select('*')
+        .order('date', { ascending: false });
+
+      if (error) throw error;
+      if (data) {
+        setAlerts(data.map(mapAlertFromDB));
+      }
+    } catch (err) {
+      console.error("Failed to fetch alerts:", err);
+    }
   };
 
-  const handleRefreshArticleDetail = () => {
+  const handleRefreshArticleDetail = async () => {
     if (!selectedArticle) return;
-    fetch(`/api/articles/${selectedArticle.id}`)
-      .then(res => res.json())
-      .then(data => {
-        setSelectedArticle(data);
-        // Refresh full feed
+    try {
+      const { data, error } = await supabase
+        .from('articles')
+        .select('*')
+        .eq('id', selectedArticle.id)
+        .single();
+
+      if (error) throw error;
+      if (data) {
+        setSelectedArticle(mapArticleFromDB(data));
         fetchArticles();
-      })
-      .catch(err => console.error(err));
+      }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const toggleTheme = () => {
