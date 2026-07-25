@@ -274,6 +274,28 @@ export default function ArticleDetail({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* LEFT TWO COLUMNS: Headline, Summaries, Impact, Analysis */}
         <div className="lg:col-span-2 space-y-8">
+          {/* Author Profile Banner for Clinical Insights */}
+          {(article.category === "Clinical Insights" || article.author_name) && (
+            <div className="p-6 mb-6 rounded-2xl bg-gradient-to-r from-teal-900/10 via-emerald-900/10 to-cyan-900/10 dark:from-teal-950/50 dark:via-emerald-950/50 dark:to-cyan-950/50 border border-teal-200/80 dark:border-teal-800/80 shadow-xs flex flex-col sm:flex-row items-center sm:items-start gap-5">
+              <img
+                src="https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=400&q=80"
+                alt={article.author_name || "Dr. Priya Nair"}
+                className="w-20 h-20 rounded-full object-cover border-3 border-teal-600 shadow-md shrink-0"
+              />
+              <div className="space-y-1.5 text-center sm:text-left flex-1">
+                <h2 className="text-lg font-extrabold text-zinc-900 dark:text-white">
+                  {article.author_name || "Dr. Priya Nair"}
+                </h2>
+                <p className="text-xs font-mono text-zinc-600 dark:text-zinc-400 font-semibold tracking-wide">
+                  {article.author_qualifications || "MBBS, MD (General Medicine), DM (Endocrinology)"}
+                </p>
+                <p className="text-sm font-sans text-teal-700 dark:text-teal-400 font-bold">
+                  {article.author_title || "Consultant Endocrinologist & Diabetologist"}
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Article Header Metadata */}
           <div>
             <div className="flex flex-wrap items-center gap-2 mb-3">
@@ -434,7 +456,8 @@ export default function ArticleDetail({
           </div>
 
           {/* INTERACTIVE WHY THIS MATTERS TABS */}
-          <div className={pStyles.container}>
+          {article.whyThisMatters && (
+            <div className={pStyles.container}>
             <div className={pStyles.header}>
               <div className="flex items-center space-x-2">
                 <Star className="w-4 h-4 text-amber-500" />
@@ -478,7 +501,8 @@ export default function ArticleDetail({
                 {article.whyThisMatters[activeAudience]}
               </p>
             </div>
-          </div>
+            </div>
+          )}
 
           {/* SIDE-BY-SIDE RECOMMENDATION COMPARISON "WHAT CHANGED" */}
           {article.whatChanged && (
@@ -534,35 +558,41 @@ export default function ArticleDetail({
           )}
 
           {/* REFERENCES & ORIGINAL LINK */}
-          <div className={pStyles.container}>
-            <div className={pStyles.header}>
-              <h4 className={pStyles.headerTitle}>
-                Official Citations & External Sources
-              </h4>
-            </div>
-            <div className="p-5 text-xs">
-              <ul className={`space-y-2 mb-4 font-mono ${pStyles.textPrimary}`}>
-                {article.references.map((ref, idx) => (
-                  <li key={idx} className="flex items-start">
-                    <span className="text-teal-600 dark:text-teal-400 mr-2 shrink-0">[{idx + 1}]</span>
-                    <span className="leading-snug">{ref}</span>
-                  </li>
-                ))}
-              </ul>
-              <div className={`border-t pt-3 flex items-center justify-between text-[11px] font-mono ${pStyles.tabsBorder}`}>
-                <span className={pStyles.textPrimary}>Source Organization: <strong className={pStyles.headerTitle}>{article.sourceName}</strong></span>
-                <a
-                  href={article.sourceUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-teal-600 dark:text-teal-400 hover:underline flex items-center space-x-1 font-semibold"
-                >
-                  <span>Read the original report</span>
-                  <ChevronRight className="w-3 h-3" />
-                </a>
+          {(article.references?.length > 0 || article.sourceName) && (
+            <div className={pStyles.container}>
+              <div className={pStyles.header}>
+                <h4 className={pStyles.headerTitle}>
+                  Official Citations & External Sources
+                </h4>
+              </div>
+              <div className="p-5 text-xs">
+                {article.references && article.references.length > 0 && (
+                  <ul className={`space-y-2 mb-4 font-mono ${pStyles.textPrimary}`}>
+                    {article.references.map((ref, idx) => (
+                      <li key={idx} className="flex items-start">
+                        <span className="text-teal-600 dark:text-teal-400 mr-2 shrink-0">[{idx + 1}]</span>
+                        <span className="leading-snug">{ref}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <div className={`border-t pt-3 flex items-center justify-between text-[11px] font-mono ${pStyles.tabsBorder}`}>
+                  <span className={pStyles.textPrimary}>Source Organization: <strong className={pStyles.headerTitle}>{article.sourceName || "HealicWire Editorial Board"}</strong></span>
+                  {article.sourceUrl && (
+                    <a
+                      href={article.sourceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-teal-600 dark:text-teal-400 hover:underline flex items-center space-x-1 font-semibold"
+                    >
+                      <span>Read the original report</span>
+                      <ChevronRight className="w-3 h-3" />
+                    </a>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* RIGHT COLUMN: AI Credibility panel, Clinical Chat, dynamic exam prep */}
@@ -1633,7 +1663,7 @@ function getSectionStyles(index: number, readerTheme: "default" | "warm" | "dark
   }
 }
 
-function renderDetailedAnalysis(body: string, articleId: string, readerTheme: "default" | "warm" | "dark" = "warm") {
+export function renderDetailedAnalysis(body: string, articleId: string, readerTheme: "default" | "warm" | "dark" = "warm") {
   // Preprocess body to isolate headings that are missing double newlines
   const normalizedBody = body
     .replace(/(^|\n)(###\s+[^\n]+)(\n|$)/g, "$1\n$2\n\n")
@@ -1701,57 +1731,76 @@ function renderDetailedAnalysis(body: string, articleId: string, readerTheme: "d
                 const trimmed = block.trim();
                 if (!trimmed) return null;
 
-                // Check if block is a table (contains | and dashes)
-                if (trimmed.startsWith("|") && trimmed.includes("\n|")) {
-                  const lines = trimmed.split("\n").map(l => l.trim()).filter(Boolean);
-                  if (lines.length >= 3) {
-                    // Header line
-                    const headers = lines[0].split("|").map(s => s.trim()).filter((_, i) => i > 0 && i < lines[0].split("|").length - 1);
-                    // Rows
-                    const rows = lines.slice(2).map(rowLine => {
-                      return rowLine.split("|").map(s => s.trim()).filter((_, i) => i > 0 && i < rowLine.split("|").length - 1);
-                    });
+                // Check if block contains a markdown table
+                const lines = trimmed.split("\n").map(l => l.trim()).filter(Boolean);
+                const tableStartIndex = lines.findIndex(l => l.startsWith("|") && l.includes("|", 1));
+                
+                if (tableStartIndex !== -1 && lines.length > tableStartIndex + 1 && lines[tableStartIndex + 1].includes("|-")) {
+                  const textBeforeTable = lines.slice(0, tableStartIndex).join("\n");
+                  // Header line
+                  const headers = lines[tableStartIndex].split("|").map(s => s.trim()).filter((_, i) => i > 0 && i < lines[tableStartIndex].split("|").length - 1);
+                  // Rows
+                  const rows = lines.slice(tableStartIndex + 2).map(rowLine => {
+                    if (!rowLine.startsWith("|")) return null;
+                    return rowLine.split("|").map(s => s.trim()).filter((_, i) => i > 0 && i < rowLine.split("|").length - 1);
+                  }).filter(Boolean) as string[][];
 
-                    return (
-                      <div key={bIdx} className="space-y-4">
-                        <div className={`overflow-x-auto my-4 rounded-xl border shadow-xs ${styles.tableContainer}`}>
-                          <table className="min-w-full divide-y divide-zinc-200 dark:divide-zinc-800 text-left font-sans">
-                            <thead className={styles.thead}>
-                              <tr>
-                                {headers.map((h, hIdx) => (
-                                  <th key={hIdx} className={`px-3 py-2 text-[10px] font-mono font-bold uppercase tracking-wider ${styles.th}`}>
-                                    {formatInlineMarkdown(h, readerTheme)}
-                                  </th>
+                  return (
+                    <div key={bIdx} className="space-y-4">
+                      {textBeforeTable && (
+                        <p className={`leading-relaxed my-3.5 text-justify ${styles.p}`}>
+                          {formatInlineMarkdown(textBeforeTable, readerTheme)}
+                        </p>
+                      )}
+                      <div className={`overflow-x-auto my-4 rounded-xl border shadow-xs ${styles.tableContainer}`}>
+                        <table className="min-w-full divide-y divide-zinc-200 dark:divide-zinc-800 text-left font-sans">
+                          <thead className={styles.thead}>
+                            <tr>
+                              {headers.map((h, hIdx) => (
+                                <th key={hIdx} className={`px-3 py-2 text-[10px] font-mono font-bold uppercase tracking-wider ${styles.th}`}>
+                                  {formatInlineMarkdown(h, readerTheme)}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody className={`divide-y text-xs ${styles.tbody}`}>
+                            {rows.map((row, rIdx) => (
+                              <tr key={rIdx} className={`${styles.trHover} transition-colors`}>
+                                {row.map((cell, cIdx) => (
+                                  <td key={cIdx} className={`px-3 py-2 font-medium border-b ${styles.td}`}>
+                                    {cIdx === 0 ? <strong className={`font-semibold ${styles.strong}`}>{formatInlineMarkdown(cell, readerTheme)}</strong> : formatInlineMarkdown(cell, readerTheme)}
+                                  </td>
                                 ))}
                               </tr>
-                            </thead>
-                            <tbody className={`divide-y text-xs ${styles.tbody}`}>
-                              {rows.map((row, rIdx) => (
-                                <tr key={rIdx} className={`${styles.trHover} transition-colors`}>
-                                  {row.map((cell, cIdx) => (
-                                    <td key={cIdx} className={`px-3 py-2 font-medium border-b ${styles.td}`}>
-                                      {cIdx === 0 ? <strong className={`font-semibold ${styles.strong}`}>{formatInlineMarkdown(cell, readerTheme)}</strong> : formatInlineMarkdown(cell, readerTheme)}
-                                    </td>
-                                  ))}
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-
-                        {/* DYNAMIC VISUAL DIAGRAM INJECTION */}
-                        {articleId === "art-001" && <TuberculosisVisuals readerTheme={readerTheme} />}
-                        {articleId === "art-002" && <SemaglutideVisuals readerTheme={readerTheme} />}
-                        {articleId === "art-003" && <HypertensionVisuals readerTheme={readerTheme} />}
-                        {articleId === "art-004" && <StrokeAIVisuals readerTheme={readerTheme} />}
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
-                    );
-                  }
+
+                      {/* DYNAMIC VISUAL DIAGRAM INJECTION */}
+                      {articleId === "art-001" && <TuberculosisVisuals readerTheme={readerTheme} />}
+                      {articleId === "art-002" && <SemaglutideVisuals readerTheme={readerTheme} />}
+                      {articleId === "art-003" && <HypertensionVisuals readerTheme={readerTheme} />}
+                      {articleId === "art-004" && <StrokeAIVisuals readerTheme={readerTheme} />}
+                    </div>
+                  );
+                }
+
+                // Check if block looks like ASCII art or a raw diagram (multiple spaces, box drawing chars)
+                if (trimmed.includes("    ") || /^[│┌├└─]/m.test(trimmed)) {
+                  return (
+                    <div key={bIdx} className={`overflow-x-auto my-4 rounded-xl p-4 border shadow-xs ${styles.tableContainer}`}>
+                      <pre className="font-mono text-[10px] sm:text-[11px] leading-relaxed whitespace-pre" style={{ color: "inherit", fontFamily: "monospace" }}>
+                        {trimmed}
+                      </pre>
+                    </div>
+                  );
                 }
 
                 // Check if block is a bullet list (starts with - or *)
-                if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
-                  const items = trimmed.split("\n").map(item => item.replace(/^[-*]\s*/, "").trim());
+                if (/^[-*]\s/.test(trimmed)) {
+                  // Split by newlines or by space preceding a bullet to handle inline bullets
+                  const items = trimmed.split(/(?:\s+|\n)(?=[-*]\s)/).map(item => item.replace(/^[-*]\s*/, "").trim());
                   return (
                     <ul key={bIdx} className={`list-disc pl-5 space-y-1.5 my-3 font-sans ${styles.ul}`}>
                       {items.map((item, itemIdx) => (
@@ -1760,6 +1809,21 @@ function renderDetailedAnalysis(body: string, articleId: string, readerTheme: "d
                         </li>
                       ))}
                     </ul>
+                  );
+                }
+
+                // Check if block is a numbered list (starts with 1. )
+                if (/^\d+\.\s/.test(trimmed)) {
+                  // Split by newlines or by space preceding a number to handle inline numbered lists
+                  const items = trimmed.split(/(?:\s+|\n)(?=\d+\.\s)/).map(item => item.replace(/^\d+\.\s*/, "").trim());
+                  return (
+                    <ol key={bIdx} className={`list-decimal pl-5 space-y-1.5 my-3 font-sans ${styles.ul}`}>
+                      {items.map((item, itemIdx) => (
+                        <li key={itemIdx} className="leading-relaxed">
+                          {formatInlineMarkdown(item, readerTheme)}
+                        </li>
+                      ))}
+                    </ol>
                   );
                 }
 
@@ -1804,7 +1868,18 @@ function formatInlineMarkdown(text: string, readerTheme: "default" | "warm" | "d
                   </em>
                 );
               }
-              return sub;
+              // Handle newlines
+              const lines = sub.split("\n");
+              return (
+                <React.Fragment key={j}>
+                  {lines.map((line, k) => (
+                    <React.Fragment key={k}>
+                      {line}
+                      {k < lines.length - 1 && <br />}
+                    </React.Fragment>
+                  ))}
+                </React.Fragment>
+              );
             })}
           </React.Fragment>
         );

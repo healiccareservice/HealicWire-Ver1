@@ -118,6 +118,7 @@ export interface Article {
   status: "published" | "draft" | "ingested" | "archived";
   sourceName: string;
   sourceUrl: string;
+  isEditorial?: boolean;
   evidenceLevel: EvidenceLevel;
   isAiAssisted: boolean;
   summary30s: string;
@@ -140,6 +141,9 @@ export interface Article {
   factCheckClaims?: FactCheckClaim[];
   clinicalImpactScore?: number;
   views: number;
+  author_name?: string;
+  author_qualifications?: string;
+  author_title?: string;
 }
 
 export interface LivingGuideline {

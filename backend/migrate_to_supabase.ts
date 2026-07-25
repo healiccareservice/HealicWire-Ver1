@@ -24,7 +24,6 @@ async function migrate() {
     console.log(`Migrating ${db.articles.length} articles...`);
     for (const a of db.articles) {
       const payload = {
-        id: a.id,
         slug: a.slug || a.id,
         headline: a.headline,
         subhead: a.subhead,
@@ -59,7 +58,7 @@ async function migrate() {
         fact_check_claims: a.factCheckClaims,
         clinical_impact_score: a.clinicalImpactScore
       };
-      const { error } = await supabase.from('articles').upsert(payload);
+      const { error } = await supabase.from('articles').insert(payload);
       if (error) console.error("Error inserting article:", a.headline, error.message);
     }
   }
@@ -69,7 +68,6 @@ async function migrate() {
     console.log(`Migrating ${db.alerts.length} hospital alerts...`);
     for (const a of db.alerts) {
       const payload = {
-        id: a.id,
         headline: a.headline,
         severity: a.severity,
         urgency: a.urgency,
@@ -78,7 +76,7 @@ async function migrate() {
         source: a.source,
         date: a.date
       };
-      const { error } = await supabase.from('hospital_alerts').upsert(payload);
+      const { error } = await supabase.from('hospital_alerts').insert(payload);
       if (error) console.error("Error inserting alert:", a.headline, error.message);
     }
   }
@@ -88,7 +86,6 @@ async function migrate() {
     console.log(`Migrating ${db.guidelines.length} living guidelines...`);
     for (const g of db.guidelines) {
       const payload = {
-        id: g.id,
         condition: g.condition,
         issuing_organization: g.issuingOrganization,
         current_recommendation: g.currentRecommendation,
@@ -98,7 +95,7 @@ async function migrate() {
         india_relevance: g.indiaRelevance,
         "references": g.references || []
       };
-      const { error } = await supabase.from('living_guidelines').upsert(payload);
+      const { error } = await supabase.from('living_guidelines').insert(payload);
       if (error) console.error("Error inserting guideline:", g.condition, error.message);
     }
   }
@@ -108,7 +105,6 @@ async function migrate() {
     console.log(`Migrating ${db.events.length} scientific events...`);
     for (const e of db.events) {
       const payload = {
-        id: e.id,
         title: e.title,
         organizer: e.organizer,
         scope: e.scope,
@@ -147,7 +143,7 @@ async function migrate() {
         submission_url: e.submissionUrl,
         ai_summary: e.aiSummary
       };
-      const { error } = await supabase.from('scientific_events').upsert(payload);
+      const { error } = await supabase.from('scientific_events').insert(payload);
       if (error) console.error("Error inserting event:", e.title, error.message);
     }
   }

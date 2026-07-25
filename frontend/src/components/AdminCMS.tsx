@@ -49,6 +49,7 @@ interface AdminCMSProps {
 
 export default function AdminCMS({ onClose }: AdminCMSProps) {
   const [articles, setArticles] = useState<Article[]>([]);
+  const [editorials, setEditorials] = useState<Article[]>([]);
   const [corrections, setCorrections] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
@@ -57,6 +58,37 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
   >("catalog");
 
   // Editorial Form State
+  const [bulkNewsDate, setBulkNewsDate] = useState(new Date().toISOString().split("T")[0]);
+  const [bulkNewsCount, setBulkNewsCount] = useState(1);
+  const [isBulkGenerating, setIsBulkGenerating] = useState(false);
+  const [bulkNewsMessage, setBulkNewsMessage] = useState<string | null>(null);
+
+  const handleBulkNewsSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsBulkGenerating(true);
+    setBulkNewsMessage(null);
+    fetch("/api/generate-bulk-news", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ targetDate: bulkNewsDate, count: bulkNewsCount })
+    })
+      .then(res => res.json())
+      .then(data => {
+        setIsBulkGenerating(false);
+        if (data.success) {
+          setBulkNewsMessage(`Successfully generated and published ${data.count} news items for ${bulkNewsDate}.`);
+          fetchData();
+        } else {
+          setBulkNewsMessage(`Failed: ${data.error}`);
+        }
+      })
+      .catch(err => {
+        setIsBulkGenerating(false);
+        setBulkNewsMessage("Server error while generating news.");
+        console.error(err);
+      });
+  };
+
   const [editorialForm, setEditorialForm] = useState({
     headline: "",
     subhead: "",
@@ -69,6 +101,7 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
     readingTimeMinutes: 3,
     summary30s: "",
     bodyAnalysis: "",
+    criteria: "",
     clinicalImpactScore: 8,
     status: "published" as "published" | "draft"
   });
@@ -234,6 +267,40 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
 
   // Edit form state
   const [editingArticle, setEditingArticle] = useState<Article | null>(null);
+  const [isFetchingWikiImage, setIsFetchingWikiImage] = useState(false);
+
+  const fetchRandomWikiImageForEdit = async () => {
+    if (!editingArticle) return;
+    setIsFetchingWikiImage(true);
+    try {
+      const topic = editingArticle.category || editingArticle.headline || "Medicine";
+      const url = `https://en.wikipedia.org/w/api.php?action=query&format=json&prop=pageimages&generator=search&gsrsearch=${encodeURIComponent(topic)}&gsrlimit=20&pithumbsize=800&origin=*`;
+      const res = await fetch(url);
+      const json = await res.json();
+      
+      const urls: string[] = [];
+      if (json.query && json.query.pages) {
+        for (const key in json.query.pages) {
+          const page = json.query.pages[key];
+          if (page.thumbnail && page.thumbnail.source && !page.thumbnail.source.includes('svg')) {
+            urls.push(page.thumbnail.source);
+          }
+        }
+      }
+      
+      if (urls.length > 0) {
+        const randomUrl = urls[Math.floor(Math.random() * urls.length)];
+        setEditingArticle({ ...editingArticle, imageUrl: randomUrl, imageCredit: "Wikimedia Commons" });
+      } else {
+        alert("Could not find a suitable image on Wikimedia.");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Error fetching from Wikimedia.");
+    } finally {
+      setIsFetchingWikiImage(false);
+    }
+  };
 
   // Create / Edit Scientific Events Page State & Handler
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
@@ -511,6 +578,11 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
       })
       .catch(err => console.error(err));
 
+    authFetch("/api/admin/editorials")
+      .then(res => res.json())
+      .then(data => setEditorials(data.map((e: any) => ({ ...e, isEditorial: true }))))
+      .catch(err => console.error(err));
+
     authFetch("/api/admin/corrections")
       .then(res => res.json())
       .then(data => setCorrections(data))
@@ -695,15 +767,19 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
   // Submit Editorial
   const handleWriteEditorialSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editorialForm.headline.trim() || !editorialForm.summary30s.trim()) return;
+    if (!editorialForm.headline.trim()) return;
+    if (!editorialForm.summary30s.trim()) {
+      alert("Please click '✨ Generate using AI' first to author the article before publishing.");
+      return;
+    }
 
-    authFetch("/api/admin/articles", {
+    authFetch("/api/admin/editorials", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ...editorialForm,
         specialties: editorialForm.specialties.split(",").map(s => s.trim()),
-        publishedAt: new Date().toISOString()
+        status: "published"
       })
     })
       .then(res => res.json())
@@ -718,9 +794,10 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
           imageUrl: "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=800&q=80",
           imageCredit: "Editorial Photo / Unsplash",
           sourceName: "HealicWire Editorial Board",
-          readingTimeMinutes: 3,
+          readingTimeMinutes: 6,
           summary30s: "",
           bodyAnalysis: "",
+          criteria: "",
           clinicalImpactScore: 8,
           status: "published"
         });
@@ -739,10 +816,15 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
     setAiGeneratingEditorial(true);
     setEditorialSuccess(null);
 
-    authFetch("/api/admin/ingest", {
+    authFetch("/api/admin/editorials/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ topic: editorialForm.headline })
+      body: JSON.stringify({ 
+        topic: editorialForm.headline,
+        criteria: editorialForm.criteria,
+        category: editorialForm.category,
+        region: editorialForm.region
+      })
     })
       .then(res => res.json())
       .then(data => {
@@ -750,33 +832,25 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
         if (data.success && data.article) {
           setEditorialForm(prev => ({
             ...prev,
+            headline: data.article.headline || prev.headline,
+            subhead: data.article.subhead || prev.subhead,
             summary30s: data.article.summary30s || prev.summary30s,
             bodyAnalysis: data.article.bodyAnalysis || prev.bodyAnalysis,
             category: data.article.category || prev.category,
             specialties: data.article.specialties?.join(", ") || prev.specialties,
-            readingTimeMinutes: data.article.readingTimeMinutes || prev.readingTimeMinutes
+            readingTimeMinutes: data.article.readingTimeMinutes || prev.readingTimeMinutes,
+            imageUrl: data.article.imageUrl || prev.imageUrl,
+            imageCredit: data.article.imageCredit || prev.imageCredit
           }));
-          setEditorialSuccess(`✨ AI successfully generated executive summary & analysis for "${editorialForm.headline}"`);
+          setEditorialSuccess(`✨ AI successfully generated 1300-word executive summary & analysis for "${editorialForm.headline}"`);
         } else {
-          // Fallback editorial generator
-          const topic = editorialForm.headline;
-          setEditorialForm(prev => ({
-            ...prev,
-            summary30s: `Executive Clinical Brief: Critical evidence review regarding ${topic}. Outlines key therapeutic implications, guidelines, and risk factors for active practice.`,
-            bodyAnalysis: `CHIEF EDITORIAL ANALYSIS:\n\nRecent scientific publications and clinical guidelines regarding "${topic}" highlight significant shifts in current medical management.\n\n1. Clinical Evidence & Guideline Context:\nEmerging evidence demonstrates measurable outcomes across clinical cohorts. Practitioners should re-evaluate existing dosing protocols, patient selection criteria, and diagnostic monitoring frequencies.\n\n2. Key Practice Takeaways:\n- Implement revised diagnostic screening prior to initiating therapy.\n- Monitor patient tolerance and biomarker responses at 4-week and 12-week intervals.\n- Collaborate across multidisciplinary teams to ensure seamless care transition.\n\nConclusion:\nAdopting evidence-based protocols ensures optimal patient outcomes while mitigating adverse risk factors.`
-          }));
-          setEditorialSuccess(`✨ AI successfully generated executive summary & analysis for "${editorialForm.headline}"`);
+          setEditorialSuccess(`Error generating editorial: ${data.error}`);
         }
       })
       .catch(err => {
         setAiGeneratingEditorial(false);
-        const topic = editorialForm.headline;
-        setEditorialForm(prev => ({
-          ...prev,
-          summary30s: `Executive Clinical Brief: Critical evidence review regarding ${topic}. Outlines key therapeutic implications, guidelines, and risk factors for active practice.`,
-          bodyAnalysis: `CHIEF EDITORIAL ANALYSIS:\n\nRecent scientific publications and clinical guidelines regarding "${topic}" highlight significant shifts in current medical management.\n\n1. Clinical Evidence & Guideline Context:\nEmerging evidence demonstrates measurable outcomes across clinical cohorts. Practitioners should re-evaluate existing dosing protocols, patient selection criteria, and diagnostic monitoring frequencies.\n\n2. Key Practice Takeaways:\n- Implement revised diagnostic screening prior to initiating therapy.\n- Monitor patient tolerance and biomarker responses at 4-week and 12-week intervals.\n- Collaborate across multidisciplinary teams to ensure seamless care transition.\n\nConclusion:\nAdopting evidence-based protocols ensures optimal patient outcomes while mitigating adverse risk factors.`
-        }));
-        setEditorialSuccess(`✨ AI successfully generated executive summary & analysis for "${editorialForm.headline}"`);
+        console.error(err);
+        setEditorialSuccess(`Server error generating editorial.`);
       });
   };
 
@@ -881,9 +955,10 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
       .catch(err => console.error(err));
   };
 
-  const handleDelete = (articleId: string) => {
+  const handleDelete = (articleId: string, isEditorial: boolean = false) => {
     if (!confirm("Are you sure you want to delete this content?")) return;
-    authFetch(`/api/admin/articles/${articleId}`, { method: "DELETE" })
+    const endpoint = isEditorial ? `/api/admin/editorials/${articleId}` : `/api/admin/articles/${articleId}`;
+    authFetch(endpoint, { method: "DELETE" })
       .then(res => res.json())
       .then(() => fetchData())
       .catch(err => console.error(err));
@@ -892,7 +967,8 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
   const handleSaveEdit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingArticle) return;
-    authFetch(`/api/admin/articles/${editingArticle.id}`, {
+    const endpoint = editingArticle.isEditorial ? `/api/admin/editorials/${editingArticle.id}` : `/api/admin/articles/${editingArticle.id}`;
+    authFetch(endpoint, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(editingArticle)
@@ -906,7 +982,7 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
   };
 
   const ingestedQueue = articles.filter(a => a.status === "ingested");
-  const catalog = articles.filter(a => a.status !== "ingested");
+  const catalog = [...articles.filter(a => a.status !== "ingested"), ...editorials].sort((a, b) => new Date(b.publishedAt || b.id).getTime() - new Date(a.publishedAt || a.id).getTime());
 
   return (
     <div className="fixed inset-0 z-50 bg-zinc-900/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-hidden">
@@ -993,7 +1069,7 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
                 >
                   <div className="flex items-center space-x-2.5">
                     <Wand2 className="w-4 h-4 text-indigo-600" />
-                    <span>Generate News</span>
+                    <span>Generate Specialty News</span>
                   </div>
                   <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-indigo-100 text-indigo-700 font-bold">
                     AI
@@ -1122,9 +1198,9 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
           <div className="bg-white dark:bg-zinc-950 px-8 py-6 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between shrink-0">
             <div>
               <h1 className="text-2xl font-bold text-zinc-900 dark:text-white font-sans tracking-tight">
-                {activeTab === "catalog" && "Blog Publications Engine"}
+                {activeTab === "catalog" && "Global Healthcare News Generat Engine"}
                 {activeTab === "write_editorial" && "Write Editorial Article"}
-                {activeTab === "generate_news" && "AI Medical News Generator"}
+                {activeTab === "generate_news" && "Generate Specialty News"}
                 {activeTab === "create_pages" && "Create Portal Pages"}
                 {activeTab === "create_scientific_events" && "Create Scientific Events Page"}
                 {activeTab === "upload_images" && "Google Cloud Storage Asset Manager"}
@@ -1141,14 +1217,6 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
 
             {/* Quick Action Buttons Header Bar */}
             <div className="flex items-center space-x-3">
-              <button
-                onClick={() => { setActiveTab("generate_news"); setEditingArticle(null); }}
-                className="px-3.5 py-2 rounded-lg bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800 text-xs font-semibold flex items-center space-x-1.5 hover:bg-indigo-100 transition-all"
-              >
-                <Wand2 className="w-3.5 h-3.5 text-indigo-600" />
-                <span>Bulk AI News</span>
-              </button>
-
               <button
                 onClick={() => { setActiveTab("write_editorial"); setEditingArticle(null); }}
                 className="px-4 py-2 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-xs font-bold flex items-center space-x-1.5 hover:bg-zinc-800 transition-all shadow-xs"
@@ -1185,23 +1253,146 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
                     />
                   </div>
 
-                  <div className="md:col-span-2">
-                    <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">30-Second Summary *</label>
-                    <textarea
-                      rows={3}
-                      value={editingArticle.summary30s}
-                      onChange={e => setEditingArticle({ ...editingArticle, summary30s: e.target.value })}
+                  <div className="md:col-span-1">
+                    <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">Slug *</label>
+                    <input
+                      type="text"
+                      required
+                      value={editingArticle.slug || ""}
+                      onChange={e => setEditingArticle({ ...editingArticle, slug: e.target.value })}
+                      className="w-full px-3.5 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white"
+                    />
+                  </div>
+
+                  <div className="md:col-span-1">
+                    <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">Category</label>
+                    <input
+                      type="text"
+                      value={editingArticle.category || ""}
+                      onChange={e => setEditingArticle({ ...editingArticle, category: e.target.value })}
+                      className="w-full px-3.5 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white"
+                    />
+                  </div>
+
+                  <div className="md:col-span-1">
+                    <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">Region</label>
+                    <select
+                      value={editingArticle.region || "Global"}
+                      onChange={e => setEditingArticle({ ...editingArticle, region: e.target.value as any })}
+                      className="w-full px-3.5 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white"
+                    >
+                      <option value="Global">Global</option>
+                      <option value="India">India</option>
+                      <option value="US & Europe">US & Europe</option>
+                    </select>
+                  </div>
+
+                  <div className="md:col-span-1">
+                    <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">Status</label>
+                    <select
+                      value={editingArticle.status || "published"}
+                      onChange={e => setEditingArticle({ ...editingArticle, status: e.target.value as any })}
+                      className="w-full px-3.5 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white"
+                    >
+                      <option value="published">Published</option>
+                      <option value="draft">Draft</option>
+                      <option value="ingested">Ingested</option>
+                      <option value="archived">Archived</option>
+                    </select>
+                  </div>
+
+                  <div className="md:col-span-1">
+                    <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">Source Name</label>
+                    <input
+                      type="text"
+                      value={editingArticle.sourceName || ""}
+                      onChange={e => setEditingArticle({ ...editingArticle, sourceName: e.target.value })}
+                      className="w-full px-3.5 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white"
+                    />
+                  </div>
+
+                  <div className="md:col-span-1">
+                    <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">Source URL</label>
+                    <input
+                      type="url"
+                      value={editingArticle.sourceUrl || ""}
+                      onChange={e => setEditingArticle({ ...editingArticle, sourceUrl: e.target.value })}
+                      className="w-full px-3.5 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white"
+                    />
+                  </div>
+                  
+                  <div className="md:col-span-1">
+                    <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">Image URL</label>
+                    <div className="flex space-x-2">
+                      <input
+                        type="url"
+                        value={editingArticle.imageUrl || ""}
+                        onChange={e => setEditingArticle({ ...editingArticle, imageUrl: e.target.value })}
+                        className="flex-1 w-full px-3.5 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white"
+                      />
+                      <button 
+                        type="button"
+                        onClick={fetchRandomWikiImageForEdit}
+                        disabled={isFetchingWikiImage}
+                        className="px-3 py-2 bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-xs font-semibold rounded-lg hover:bg-zinc-300 dark:hover:bg-zinc-700 transition-colors whitespace-nowrap"
+                      >
+                        {isFetchingWikiImage ? "Fetching..." : "Random Wiki Image"}
+                      </button>
+                    </div>
+                    {editingArticle.imageUrl && (
+                      <div className="mt-2">
+                        <img src={editingArticle.imageUrl} alt="Preview" className="h-24 w-full object-cover rounded-lg border border-zinc-300 dark:border-zinc-800" />
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="md:col-span-1">
+                    <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">Image Credit</label>
+                    <input
+                      type="text"
+                      value={editingArticle.imageCredit || ""}
+                      onChange={e => setEditingArticle({ ...editingArticle, imageCredit: e.target.value })}
                       className="w-full px-3.5 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white"
                     />
                   </div>
 
                   <div className="md:col-span-2">
-                    <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">Detailed Body Analysis</label>
+                    <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">Subhead / Teaser</label>
+                    <textarea
+                      rows={2}
+                      value={editingArticle.subhead || ""}
+                      onChange={e => setEditingArticle({ ...editingArticle, subhead: e.target.value })}
+                      className="w-full px-3.5 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">30-Second Summary *</label>
+                    <textarea
+                      rows={3}
+                      value={editingArticle.summary30s || ""}
+                      onChange={e => setEditingArticle({ ...editingArticle, summary30s: e.target.value })}
+                      className="w-full px-3.5 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white"
+                    />
+                  </div>
+                  
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">2-Minute Summary (Markdown)</label>
+                    <textarea
+                      rows={4}
+                      value={editingArticle.summary2min || ""}
+                      onChange={e => setEditingArticle({ ...editingArticle, summary2min: e.target.value })}
+                      className="w-full px-3.5 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white font-mono text-[10px]"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">Detailed Body Analysis (Markdown)</label>
                     <textarea
                       rows={6}
-                      value={editingArticle.bodyAnalysis}
+                      value={editingArticle.bodyAnalysis || ""}
                       onChange={e => setEditingArticle({ ...editingArticle, bodyAnalysis: e.target.value })}
-                      className="w-full px-3.5 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white"
+                      className="w-full px-3.5 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white font-mono text-[10px]"
                     />
                   </div>
                 </div>
@@ -1258,98 +1449,52 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
                             value={editorialForm.headline}
                             onChange={e => setEditorialForm({ ...editorialForm, headline: e.target.value })}
                             placeholder="e.g. CDSCO Issues Safety Warning for Novel Antidiabetic Class..."
+                            className="w-full px-3.5 py-2.5 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white font-medium focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 mb-4"
+                          />
+                          
+                          <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
+                            Criteria / Kind of Article to be generated
+                          </label>
+                          <textarea
+                            rows={3}
+                            value={editorialForm.criteria}
+                            onChange={e => setEditorialForm({ ...editorialForm, criteria: e.target.value })}
+                            placeholder="Provide specific guidelines, themes, or criteria for the AI..."
                             className="w-full px-3.5 py-2.5 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white font-medium focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
                           />
-                          <p className="text-[10.5px] text-zinc-500 dark:text-zinc-400 flex items-center space-x-1 font-mono">
-                            <span>💡 Type your <b>Article Headline *</b> above and click</span>
+                          
+                          <p className="text-[10.5px] text-zinc-500 dark:text-zinc-400 flex items-center space-x-1 font-mono mt-2">
+                            <span>💡 Fill out the above and click</span>
                             <span className="font-bold text-teal-600 dark:text-teal-400 font-mono">"✨ Generate using AI"</span>
                             <span>to auto-compose summary & analysis.</span>
                           </p>
                         </div>
-
-                        <div>
-                          <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                            Category
-                          </label>
-                          <select
-                            value={editorialForm.category}
-                            onChange={e => setEditorialForm({ ...editorialForm, category: e.target.value })}
-                            className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white font-medium"
-                          >
-                            <option value="Clinical">Clinical Practice</option>
-                            <option value="Research">Research & Trials</option>
-                            <option value="Pharma and Drugs">Pharma and Drugs</option>
-                            <option value="Health Technology">Health Technology</option>
-                            <option value="Policy and Public Health">Policy and Public Health</option>
-                          </select>
+                        
+                        <div className="md:col-span-2 space-y-1.5 mt-2">
+                          <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300">Subhead</label>
+                          <input type="text" value={editorialForm.subhead} onChange={e => setEditorialForm({ ...editorialForm, subhead: e.target.value })} className="w-full px-3.5 py-2.5 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white font-medium focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500" />
+                        </div>
+                        
+                        <div className="md:col-span-1 space-y-1.5">
+                          <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300">Category</label>
+                          <input type="text" value={editorialForm.category} onChange={e => setEditorialForm({ ...editorialForm, category: e.target.value })} className="w-full px-3.5 py-2.5 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white font-medium focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500" />
+                        </div>
+                        
+                        <div className="md:col-span-1 space-y-1.5">
+                          <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300">Specialties (comma separated)</label>
+                          <input type="text" value={editorialForm.specialties} onChange={e => setEditorialForm({ ...editorialForm, specialties: e.target.value })} className="w-full px-3.5 py-2.5 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white font-medium focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500" />
+                        </div>
+                        
+                        <div className="md:col-span-2 space-y-1.5 mt-2">
+                          <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300">30-Second Summary</label>
+                          <textarea rows={2} value={editorialForm.summary30s} onChange={e => setEditorialForm({ ...editorialForm, summary30s: e.target.value })} className="w-full px-3.5 py-2.5 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white font-medium focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500" />
+                        </div>
+                        
+                        <div className="md:col-span-2 space-y-1.5 mt-2">
+                          <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300">Body Analysis (Markdown)</label>
+                          <textarea rows={8} value={editorialForm.bodyAnalysis} onChange={e => setEditorialForm({ ...editorialForm, bodyAnalysis: e.target.value })} className="w-full px-3.5 py-2.5 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white font-medium focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 font-mono text-[11px]" />
                         </div>
 
-                        <div>
-                          <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                            Region Relevance
-                          </label>
-                          <select
-                            value={editorialForm.region}
-                            onChange={e => setEditorialForm({ ...editorialForm, region: e.target.value as Region })}
-                            className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white font-medium"
-                          >
-                            <option value={Region.GLOBAL}>Global Healthcare</option>
-                            <option value={Region.INDIA}>🇮🇳 India Focus</option>
-                          </select>
-                        </div>
-
-                        <div className="md:col-span-2">
-                          <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                            30-Second Executive Summary *
-                          </label>
-                          <textarea
-                            required
-                            rows={3}
-                            value={editorialForm.summary30s}
-                            onChange={e => setEditorialForm({ ...editorialForm, summary30s: e.target.value })}
-                            placeholder="Key takeaway paragraph for quick scanning..."
-                            className="w-full px-3.5 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white leading-relaxed"
-                          />
-                        </div>
-
-                        <div className="md:col-span-2">
-                          <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                            Detailed Clinical Analysis & Body Content
-                          </label>
-                          <textarea
-                            rows={6}
-                            value={editorialForm.bodyAnalysis}
-                            onChange={e => setEditorialForm({ ...editorialForm, bodyAnalysis: e.target.value })}
-                            placeholder="Comprehensive clinical analysis, methodology, trial data, or practice implications..."
-                            className="w-full px-3.5 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white leading-relaxed font-sans"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                            Image URL (Free stock or illustration)
-                          </label>
-                          <input
-                            type="url"
-                            value={editorialForm.imageUrl}
-                            onChange={e => setEditorialForm({ ...editorialForm, imageUrl: e.target.value })}
-                            className="w-full px-3.5 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                            Clinical Impact Score (1-10)
-                          </label>
-                          <input
-                            type="number"
-                            min="1"
-                            max="10"
-                            value={editorialForm.clinicalImpactScore}
-                            onChange={e => setEditorialForm({ ...editorialForm, clinicalImpactScore: Number(e.target.value) })}
-                            className="w-full px-3.5 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white font-bold"
-                          />
-                        </div>
                       </div>
 
                       <div className="pt-4 border-t border-zinc-100 dark:border-zinc-900 flex justify-end space-x-3">
@@ -1368,6 +1513,53 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
                         </button>
                       </div>
                     </form>
+
+                    {/* Published & Draft Editorials List */}
+                    <div className="mt-8">
+                      <h3 className="font-bold text-zinc-900 dark:text-white uppercase font-mono mb-4 flex items-center space-x-2">
+                        <Database className="w-4 h-4 text-zinc-400" />
+                        <span>Saved Editorials (Database)</span>
+                      </h3>
+                      <div className="bg-white dark:bg-zinc-950 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
+                        <table className="w-full text-left text-xs text-zinc-500 dark:text-zinc-400">
+                          <thead className="bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 uppercase font-bold">
+                            <tr>
+                              <th className="px-4 py-3">Headline & Category</th>
+                              <th className="px-4 py-3 text-center">Status</th>
+                              <th className="px-4 py-3 text-right">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                            {editorials.length === 0 ? (
+                              <tr>
+                                <td colSpan={3} className="px-4 py-12 text-center text-zinc-400">
+                                  No editorials found in the database. Generate and publish your first editorial above.
+                                </td>
+                              </tr>
+                            ) : (
+                              editorials.map(ed => (
+                                <tr key={ed.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-colors">
+                                  <td className="px-4 py-3 max-w-[300px]">
+                                    <div className="font-bold text-zinc-900 dark:text-white truncate" title={ed.headline}>{ed.headline}</div>
+                                    <div className="text-[10px] mt-0.5 font-mono">{ed.category}</div>
+                                  </td>
+                                  <td className="px-4 py-3 text-center">
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${ed.status === 'published' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'}`}>
+                                      {ed.status}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3 text-right">
+                                    <button onClick={() => handleDelete(ed.id, true)} className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition-colors" title="Delete Editorial">
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
                   </div>
                 )}
 
@@ -2781,6 +2973,54 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
                 {/* 5. GLOBAL HEALTHCARE NEWS GENERATE TAB */}
                 {activeTab === "catalog" && (
                   <div className="space-y-6">
+                    {/* Bulk Generation UI */}
+                    <div className="bg-white dark:bg-zinc-950 p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-2xs">
+                      <div className="flex items-center space-x-2 mb-4">
+                        <Wand2 className="w-5 h-5 text-indigo-600" />
+                        <h3 className="font-bold text-zinc-900 dark:text-white uppercase font-mono">Bulk Global Healthcare News Generate</h3>
+                      </div>
+                      <p className="text-xs text-zinc-500 mb-6">
+                        Automatically generate detailed 800-word news articles based on global and Indian healthcare updates from the past 24 hours. The articles will be fully populated and saved to the database.
+                      </p>
+                      
+                      <form onSubmit={handleBulkNewsSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                        <div>
+                          <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mb-1 uppercase font-mono">Target Date</label>
+                          <input 
+                            type="date" 
+                            required 
+                            value={bulkNewsDate}
+                            onChange={(e) => setBulkNewsDate(e.target.value)}
+                            className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 text-xs"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mb-1 uppercase font-mono">No. of News</label>
+                          <input 
+                            type="number" 
+                            required 
+                            min={1}
+                            max={100}
+                            value={bulkNewsCount}
+                            onChange={(e) => setBulkNewsCount(Number(e.target.value))}
+                            className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 text-xs"
+                          />
+                        </div>
+                        <button 
+                          type="submit" 
+                          disabled={isBulkGenerating}
+                          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold font-mono tracking-wider flex justify-center items-center h-[34px]"
+                        >
+                          {isBulkGenerating ? "Generating..." : "Generate News"}
+                        </button>
+                      </form>
+                      {bulkNewsMessage && (
+                        <div className="mt-4 p-3 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 text-xs rounded-lg border border-emerald-200 dark:border-emerald-800">
+                          {bulkNewsMessage}
+                        </div>
+                      )}
+                    </div>
+
                     <div className="flex items-center justify-between bg-white dark:bg-zinc-950 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-2xs">
                       <div className="flex items-center space-x-3">
                         <div className="p-2 rounded-lg bg-emerald-50 text-emerald-600 font-bold text-xs">
@@ -2788,7 +3028,7 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
                         </div>
                         <div>
                           <h3 className="text-xs font-bold text-zinc-900 dark:text-white uppercase font-mono">
-                            Global Healthcare News Generate
+                            Published Catalog
                           </h3>
                           <span className="text-[11px] text-zinc-500 font-mono">
                             {catalog.length} published news items • Displays on main landing page under Global Healthcare News & Intel
@@ -2830,7 +3070,7 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
                                   <Edit3 className="w-3.5 h-3.5" />
                                 </button>
                                 <button
-                                  onClick={() => handleDelete(art.id)}
+                                  onClick={() => handleDelete(art.id, art.isEditorial)}
                                   className="p-1 hover:text-red-600 transition-colors"
                                   title="Delete Article"
                                 >

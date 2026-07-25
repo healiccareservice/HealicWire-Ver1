@@ -4,7 +4,7 @@
  */
 
 import { useState } from "react";
-import { Activity, ShieldAlert, BookOpen, Search, Sun, Moon, Database, Calendar, Stethoscope, Menu, X, UserCheck, Layers } from "lucide-react";
+import { Activity, ShieldAlert, BookOpen, Search, Sun, Moon, Database, Calendar, Stethoscope, Menu, X, UserCheck, Layers, Lightbulb } from "lucide-react";
 import HealicLogo from "./HealicLogo";
 
 interface HeaderProps {
@@ -34,9 +34,10 @@ export default function Header({
   const tabs = [
     { id: "news", label: "Latest News", icon: Activity },
     { id: "editorials", label: "Editorials", icon: UserCheck },
+    { id: "clinical-insights", label: "Clinical Insights", icon: Lightbulb },
     { id: "guidelines", label: "Current Guidelines", icon: BookOpen },
     { id: "pharma-drugs", label: "Pharma and Drugs", icon: Layers },
-    { id: "alerts", label: "Hospital Intelligence", icon: ShieldAlert },
+    { id: "alerts", label: "", icon: ShieldAlert },
     { id: "treatment-updates", label: "Treatment Update", icon: Stethoscope },
     { id: "events", label: "Scientific Events", icon: Calendar }
   ];

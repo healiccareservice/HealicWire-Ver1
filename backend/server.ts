@@ -176,7 +176,7 @@ async function startServer() {
   const db = loadDb();
 
   // Initialize Supabase Admin Client
-  const supabaseUrl = process.env.SUPABASE_URL || "";
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "";
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
   const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
@@ -214,65 +214,112 @@ async function startServer() {
     });
   });
 
+  // Helper to map DB snake_case back to camelCase for frontend
+  const mapArticleFromDb = (row: any) => ({
+    ...row,
+    imageUrl: row.image_url,
+    imageCredit: row.image_credit,
+    imageType: row.image_type,
+    publishedAt: row.published_at,
+    sourcePublishedAt: row.source_published_at,
+    readingTimeMinutes: row.reading_time_minutes,
+    sourceName: row.source_name,
+    sourceUrl: row.source_url,
+    evidenceLevel: row.evidence_level,
+    isAiAssisted: row.is_ai_assisted,
+    summary30s: row.summary_30s,
+    summary2min: row.summary_2min,
+    bodyAnalysis: row.body_analysis,
+    whyThisMatters: row.why_this_matters,
+    whatChanged: row.what_changed,
+    impactScores: row.impact_scores,
+    indiaRelevance: row.india_relevance,
+    peerReviewed: row.peer_reviewed,
+    fundingSource: row.funding_source,
+    coiNote: row.coi_note,
+    studyDesign: row.study_design,
+    sampleSize: row.sample_size,
+    learningModule: row.learning_module,
+    factCheckClaims: row.fact_check_claims,
+    clinicalImpactScore: row.clinical_impact_score
+  });
+
   // Get articles (with advanced filtering, search, and grouping)
-  app.get("/api/articles", (req, res) => {
-    const { category, specialty, region, evidenceLevel, q, status } = req.query;
-    const freshDb = loadDb();
-    let filtered = [...freshDb.articles];
+  app.get("/api/articles", async (req, res) => {
+    try {
+      const { category, specialty, region, evidenceLevel, q, status } = req.query;
+      let query = supabaseAdmin.from('articles').select('*');
 
-    // Filter by status (default is published for public, or all if requested for admin)
-    const targetStatus = status ? String(status) : "published";
-    if (targetStatus !== "all") {
-      filtered = filtered.filter(a => a.status === targetStatus);
+      // Filter by status (default is published for public, or all if requested for admin)
+      const targetStatus = status ? String(status) : "published";
+      if (targetStatus !== "all") {
+        query = query.eq('status', targetStatus);
+      }
+
+      if (category) query = query.ilike('category', String(category));
+      if (region) query = query.ilike('region', String(region));
+      if (evidenceLevel) query = query.ilike('evidence_level', String(evidenceLevel));
+      
+      const { data, error } = await query.order('published_at', { ascending: false });
+      if (error) throw error;
+      
+      let filtered = data.map(mapArticleFromDb);
+
+      // Dynamic views logic: jump 50 to 100 every day based on created_at
+      filtered = filtered.map(a => {
+        if (a.createdAt) {
+          const daysElapsed = Math.floor((new Date().getTime() - new Date(a.createdAt).getTime()) / (1000 * 3600 * 24));
+          if (daysElapsed > 0) {
+            const pseudoRandom = 50 + ((a.id ? a.id.charCodeAt(0) : 0) % 51); // Consistent 50-100 jump per article
+            a.views = (a.views || 0) + (daysElapsed * pseudoRandom);
+          }
+        }
+        return a;
+      });
+
+      if (specialty) {
+        const specStr = String(specialty).toLowerCase();
+        filtered = filtered.filter(a => a.specialties && a.specialties.some((s: string) => s.toLowerCase() === specStr));
+      }
+
+      if (q) {
+        const queryStr = String(q).toLowerCase();
+        filtered = filtered.filter(
+          a =>
+            (a.headline && a.headline.toLowerCase().includes(queryStr)) ||
+            (a.subhead && a.subhead.toLowerCase().includes(queryStr)) ||
+            (a.bodyAnalysis && a.bodyAnalysis.toLowerCase().includes(queryStr)) ||
+            (a.summary30s && a.summary30s.toLowerCase().includes(queryStr))
+        );
+      }
+
+      res.json(filtered);
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
     }
-
-    if (category) {
-      filtered = filtered.filter(a => a.category.toLowerCase() === String(category).toLowerCase());
-    }
-
-    if (specialty) {
-      const specStr = String(specialty).toLowerCase();
-      filtered = filtered.filter(a => a.specialties.some((s: string) => s.toLowerCase() === specStr));
-    }
-
-    if (region) {
-      filtered = filtered.filter(a => a.region.toLowerCase() === String(region).toLowerCase());
-    }
-
-    if (evidenceLevel) {
-      filtered = filtered.filter(a => a.evidenceLevel.toLowerCase() === String(evidenceLevel).toLowerCase());
-    }
-
-    if (q) {
-      const query = String(q).toLowerCase();
-      filtered = filtered.filter(
-        a =>
-          a.headline.toLowerCase().includes(query) ||
-          a.subhead.toLowerCase().includes(query) ||
-          a.bodyAnalysis.toLowerCase().includes(query) ||
-          a.summary30s.toLowerCase().includes(query)
-      );
-    }
-
-    // Sort by publish date descending
-    filtered.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
-
-    res.json(filtered);
   });
 
   // Get single article (and increment view count)
-  app.get("/api/articles/:id", (req, res) => {
-    const { id } = req.params;
-    const articleIndex = db.articles.findIndex(a => a.id === id);
+  app.get("/api/articles/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      const { data, error } = await supabaseAdmin.from('articles').select('*').eq('id', id);
+      if (error) throw error;
+      if (!data || data.length === 0) return res.status(404).json({ error: "Article not found" });
 
-    if (articleIndex === -1) {
-      return res.status(404).json({ error: "Article not found" });
+      const article = data[0];
+      const newViews = (article.views || 0) + 1;
+      
+      await supabaseAdmin.from('articles').update({ views: newViews }).eq('id', id);
+      
+      article.views = newViews;
+      res.json(mapArticleFromDb(article));
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
     }
-
-    db.articles[articleIndex].views = (db.articles[articleIndex].views || 0) + 1;
-    saveDb(db);
-
-    res.json(db.articles[articleIndex]);
   });
 
   // Create article (Admin/CMS)
@@ -381,6 +428,165 @@ async function startServer() {
       const { error } = await supabaseAdmin.from('articles').delete().eq('id', id);
       if (error) throw error;
       res.json({ success: true });
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ==========================================
+  // EDITORIALS (Admin/CMS)
+  // ==========================================
+  
+  app.get("/api/admin/editorials", async (req, res) => {
+    try {
+      const { data, error } = await supabaseAdmin.from('editorials').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      res.json((data || []).map(mapArticleFromDb));
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/admin/editorials", async (req, res) => {
+    try {
+      const slug = req.body.headline.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") + '-' + Math.floor(Math.random() * 1000);
+      const payload = {
+        slug: slug,
+        headline: req.body.headline,
+        subhead: req.body.subhead || "",
+        category: req.body.category || "Clinical",
+        specialties: req.body.specialties || [],
+        region: req.body.region || "Global",
+        image_url: req.body.imageUrl || "",
+        image_credit: req.body.imageCredit || "Editorial Illustration",
+        published_at: req.body.status === "published" ? new Date().toISOString() : null,
+        status: req.body.status || "draft",
+        author_name: req.body.sourceName || "HealicWire Editorial Board",
+        reading_time_minutes: req.body.readingTimeMinutes || 6,
+        summary_30s: req.body.summary30s || "",
+        body_analysis: req.body.bodyAnalysis || "",
+        clinical_impact_score: req.body.clinicalImpactScore || 8
+      };
+
+      const { data, error } = await supabaseAdmin.from('editorials').insert(payload).select();
+      if (error) throw error;
+      res.json(mapArticleFromDb(data[0]));
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/admin/editorials/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const payload: any = {
+        headline: req.body.headline,
+        subhead: req.body.subhead,
+        category: req.body.category,
+        specialties: req.body.specialties,
+        region: req.body.region,
+        image_url: req.body.imageUrl,
+        image_credit: req.body.imageCredit,
+        status: req.body.status,
+        author_name: req.body.sourceName,
+        reading_time_minutes: req.body.readingTimeMinutes,
+        summary_30s: req.body.summary30s,
+        body_analysis: req.body.bodyAnalysis,
+        clinical_impact_score: req.body.clinicalImpactScore,
+        updated_at: new Date().toISOString()
+      };
+      
+      if (req.body.status === "published") {
+        payload.published_at = new Date().toISOString();
+      }
+
+      const { data, error } = await supabaseAdmin.from('editorials').update(payload).eq('id', id).select();
+      if (error) throw error;
+      res.json(mapArticleFromDb(data[0]));
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/admin/editorials/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { error } = await supabaseAdmin.from('editorials').delete().eq('id', id);
+      if (error) throw error;
+      res.json({ success: true });
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/admin/editorials/generate", async (req, res) => {
+    try {
+      const { topic, criteria, category, region } = req.body;
+      if (!topic) return res.status(400).json({ error: "Topic is required" });
+
+      const prompt = `
+        You are the Chief Clinical Editor for HealicWire, a professional medical news platform.
+        Write a highly detailed, peer-level clinical editorial (approximately 1300 words) on the following topic: "${topic}".
+        ${criteria ? `\n        Follow these specific criteria and guidelines for the article:\n        ${criteria}\n` : ''}
+        The editorial should be evidence-based, referencing clinical guidelines, recent trials, and practical implications for physicians.
+        
+        Return a JSON object with the following fields:
+        {
+          "headline": "A compelling, professional headline",
+          "subhead": "A brief subheadline summarizing the main point",
+          "category": "${category || 'Clinical Practice'}",
+          "specialties": ["Specialty 1", "Specialty 2"],
+          "region": "${region || 'Global'}",
+          "readingTimeMinutes": 6,
+          "summary30s": "A 1-paragraph executive summary (approx 50 words) for quick scanning.",
+          "bodyAnalysis": "The full detailed editorial text (approx 1300 words). Use markdown for formatting, including ## headings for sections, bullet points, and paragraphs.",
+          "clinicalImpactScore": 8,
+          "sourceName": "HealicWire Editorial Board"
+        }
+      `;
+
+      const result = await getGeminiClient().models.generateContent({
+        model: "gemini-3.6-flash",
+        contents: prompt
+      });
+
+      const text = result.text || "{}";
+      const cleanJson = text.replace(/```json/g, "").replace(/```/g, "").trim();
+      const article = JSON.parse(cleanJson);
+      
+      // Fetch Wiki image
+      let finalImageUrl = "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=800&q=80";
+      let finalImageCredit = "Editorial Illustration";
+      try {
+        const wikiTopic = article.category || topic;
+        const wikiRes = await fetch(`https://en.wikipedia.org/w/api.php?action=query&format=json&prop=pageimages&generator=search&gsrsearch=${encodeURIComponent(wikiTopic)}&gsrlimit=20&pithumbsize=800`);
+        const json = await wikiRes.json();
+        const urls: string[] = [];
+        if (json.query && json.query.pages) {
+          for (const key in json.query.pages) {
+            const page = json.query.pages[key];
+            if (page.thumbnail && page.thumbnail.source && !page.thumbnail.source.includes('svg')) {
+              urls.push(page.thumbnail.source);
+            }
+          }
+        }
+        if (urls.length > 0) {
+          finalImageUrl = urls[Math.floor(Math.random() * urls.length)];
+          finalImageCredit = "Wikimedia Commons";
+        }
+      } catch (e) {
+        console.error("Wiki fetch error in editorial generation:", e);
+      }
+
+      article.imageUrl = finalImageUrl;
+      article.imageCredit = finalImageCredit;
+
+      res.json({ success: true, article });
     } catch (err: any) {
       console.error(err);
       res.status(500).json({ error: err.message });
@@ -620,6 +826,155 @@ async function startServer() {
 
   // GET generated locked weeks per section
   app.get("/api/admin/generated-weeks", (req, res) => {
+    res.json([]); // Mock implementation if not used
+  });
+
+  app.post("/api/generate-bulk-news", async (req, res) => {
+    try {
+      const { targetDate, count = 1 } = req.body;
+      const ai = getGeminiClient();
+      
+      const prompt = `
+      You are an expert medical journalist for HealicWire.
+      Generate ${count} realistic, comprehensive clinical news articles for the healthcare/pharmaceutical industry. 
+      The date of the news should be considered around: ${targetDate}.
+      
+      CRITICAL REQUIREMENT: The "bodyAnalysis" field MUST be extremely detailed, approximately 800 words in length, divided into clear markdown headings (e.g., Background, Methodology, Clinical Implementation, Future Horizons).
+      
+      CRITICAL REQUIREMENT: For "evidenceLevel", you MUST use EXACTLY ONE of the following string values and nothing else:
+      'Systematic Review', 'Meta-Analysis', 'Randomized Controlled Trial', 'Clinical Guideline', 'Regulatory Approval', 'Government Notification', 'Observational Study', 'Preprint', 'Case Report', 'Expert Opinion', 'Press Release'
+      
+      You must respond with a JSON array of objects. Do not wrap in markdown \`\`\`json. Just the raw array.
+      
+      Each object must match this schema:
+      {
+        "headline": "String",
+        "subhead": "String",
+        "category": "String (e.g., Clinical Practice, Health Tech, Policy)",
+        "specialties": ["String"],
+        "region": "String (MUST be exactly 'Global' or 'India')",
+        "imageUrl": "String (use https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=800&q=80 for now)",
+        "imageCredit": "Unsplash",
+        "imageType": "photograph",
+        "publishedAt": "${targetDate}T10:00:00Z",
+        "sourcePublishedAt": "${targetDate}T09:00:00Z",
+        "readingTimeMinutes": 5,
+        "status": "published",
+        "sourceName": "String (e.g., The Lancet, WHO, NEJM, CDSCO, HealicWire Medical Intelligence)",
+        "sourceUrl": "String (A realistic URL for the source)",
+        "evidenceLevel": "String (Must be from the exact list provided above)",
+        "isAiAssisted": true,
+        "summary30s": "String (Executive summary)",
+        "summary2min": "String (Longer summary in markdown)",
+        "bodyAnalysis": "String (Markdown, ~800 words, highly detailed clinical analysis)",
+        "whyThisMatters": { "patients": "String", "students": "String", "clinicians": "String", "researchers": "String", "hospitalAdministrators": "String" },
+        "whatChanged": { "previousStandard": "String", "newParadigm": "String" },
+        "impactScores": { "research": Number(1-5), "patientCare": Number, "publicHealth": Number, "clinicalPractice": Number, "medicalEducation": Number, "hospitalOperations": Number },
+        "clinicalImpactScore": Number(1-100),
+        "indiaRelevance": { "status": "String", "explanation": "String" },
+        "peerReviewed": true,
+        "fundingSource": "String",
+        "coiNote": "String",
+        "studyDesign": "String",
+        "sampleSize": "String",
+        "factCheckClaims": [{ "claim": "String", "status": "String" }],
+        "learningModule": { "objectives": ["String"], "keyTakeaways": ["String"], "mcqs": [] },
+        "references": ["String"]
+      }
+      `;
+
+      const result = await ai.models.generateContent({
+        model: "gemini-3.6-flash",
+        contents: prompt
+      });
+
+      const text = result.text || "[]";
+      const cleanJson = text.replace(/```json/g, "").replace(/```/g, "").trim();
+      const articles = JSON.parse(cleanJson);
+
+      let successCount = 0;
+      for (const article of articles) {
+        const validEvidenceLevels = ['Systematic Review', 'Meta-Analysis', 'Randomized Controlled Trial', 'Clinical Guideline', 'Regulatory Approval', 'Government Notification', 'Observational Study', 'Preprint', 'Case Report', 'Expert Opinion', 'Press Release'];
+        const finalEvidenceLevel = validEvidenceLevels.includes(article.evidenceLevel) ? article.evidenceLevel : "Expert Opinion";
+
+        const finalRegion = ['Global', 'India'].includes(article.region) ? article.region : 'Global';
+
+        const generatedSlug = article.headline ? article.headline.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') + '-' + Math.floor(Math.random() * 10000) : 'article-' + Math.floor(Math.random() * 1000000);
+
+        let finalImageUrl = article.imageUrl;
+        let finalImageCredit = article.imageCredit;
+        try {
+          const wikiTopic = article.category || "Medicine";
+          const res = await fetch(`https://en.wikipedia.org/w/api.php?action=query&format=json&prop=pageimages&generator=search&gsrsearch=${encodeURIComponent(wikiTopic)}&gsrlimit=20&pithumbsize=800`);
+          const json = await res.json();
+          const urls: string[] = [];
+          if (json.query && json.query.pages) {
+            for (const key in json.query.pages) {
+              const page = json.query.pages[key];
+              if (page.thumbnail && page.thumbnail.source && !page.thumbnail.source.includes('svg')) {
+                urls.push(page.thumbnail.source);
+              }
+            }
+          }
+          if (urls.length > 0) {
+            finalImageUrl = urls[Math.floor(Math.random() * urls.length)];
+            finalImageCredit = "Wikimedia Commons";
+          }
+        } catch (e) {
+          console.error("Wiki fetch error in bulk generation:", e);
+        }
+
+        // Map camelCase to snake_case for DB
+        const dbEntry = {
+          slug: generatedSlug,
+          headline: article.headline,
+          subhead: article.subhead,
+          category: article.category,
+          specialties: article.specialties || [],
+          region: finalRegion,
+          image_url: finalImageUrl,
+          image_credit: finalImageCredit,
+          image_type: article.imageType || "photograph",
+          published_at: article.publishedAt,
+          source_published_at: article.sourcePublishedAt,
+          reading_time_minutes: article.readingTimeMinutes || 5,
+          status: article.status || "published",
+          source_name: article.sourceName || "HealicWire Medical Intelligence",
+          source_url: article.sourceUrl || "https://healic.co",
+          evidence_level: finalEvidenceLevel,
+          is_ai_assisted: article.isAiAssisted || true,
+          summary_30s: article.summary30s,
+          summary_2min: article.summary2min,
+          body_analysis: article.bodyAnalysis,
+          why_this_matters: article.whyThisMatters,
+          what_changed: article.whatChanged,
+          impact_scores: article.impactScores,
+          clinical_impact_score: article.clinicalImpactScore || 50,
+          india_relevance: article.indiaRelevance,
+          peer_reviewed: article.peerReviewed || false,
+          funding_source: article.fundingSource,
+          coi_note: article.coiNote,
+          study_design: article.studyDesign,
+          sample_size: article.sampleSize,
+          fact_check_claims: article.factCheckClaims || [],
+          learning_module: article.learningModule || {},
+          references: article.references || []
+        };
+
+        const { error } = await supabaseAdmin.from("articles").insert([dbEntry]);
+        if (error) console.error("Error inserting generated article:", error);
+        else successCount++;
+      }
+
+      res.json({ success: true, count: successCount });
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // GET generated locked weeks per section
+  app.get("/api/admin/generated-weeks", (req, res) => {
     const currentDb = loadDb();
     res.json(currentDb.generatedWeeks || {});
   });
@@ -817,7 +1172,7 @@ async function startServer() {
       `;
 
       const response = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
+        model: "gemini-3.6-flash",
         contents: prompt,
         config: { temperature: 0.2 }
       });
@@ -861,7 +1216,7 @@ async function startServer() {
       `;
 
       const response = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
+        model: "gemini-3.6-flash",
         contents: prompt,
         config: {
           responseMimeType: "application/json",
@@ -869,7 +1224,9 @@ async function startServer() {
         }
       });
 
-      const summaryData = JSON.parse(response.text?.trim() || "{}");
+      const _text1 = response.text || "{}";
+      const _cleanJson1 = _text1.replace(/```json/g, "").replace(/```/g, "").trim();
+      const summaryData = JSON.parse(_cleanJson1);
       
       const { error: updateError } = await supabaseAdmin.from('scientific_events').update({ ai_summary: summaryData }).eq('id', id);
       if (updateError) throw updateError;
@@ -1071,7 +1428,7 @@ async function startServer() {
       `;
 
       const response = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
+        model: "gemini-3.6-flash",
         contents: prompt,
         config: {
           responseMimeType: "application/json",
@@ -1079,7 +1436,9 @@ async function startServer() {
         }
       });
 
-      const result = JSON.parse(response.text?.trim() || "{}");
+      const _text2 = response.text || "{}";
+      const _cleanJson2 = _text2.replace(/```json/g, "").replace(/```/g, "").trim();
+      const result = JSON.parse(_cleanJson2);
 
       // Auto-assign properties
       const payload = {
@@ -1205,7 +1564,7 @@ async function startServer() {
       });
 
       const response = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
+        model: "gemini-3.6-flash",
         contents,
         config: {
           systemInstruction,
@@ -1257,7 +1616,7 @@ async function startServer() {
       `;
 
       const response = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
+        model: "gemini-3.6-flash",
         contents: prompt,
         config: {
           responseMimeType: "application/json",
@@ -1265,7 +1624,9 @@ async function startServer() {
         }
       });
 
-      const claims = JSON.parse(response.text?.trim() || "[]");
+      const _text3 = response.text || "[]";
+      const _cleanJson3 = _text3.replace(/```json/g, "").replace(/```/g, "").trim();
+      const claims = JSON.parse(_cleanJson3);
       
       // Save results to the article in DB for persistence
       const { error: updateError } = await supabaseAdmin.from('articles').update({ fact_check_claims: claims }).eq('id', id);
@@ -1349,7 +1710,7 @@ async function startServer() {
       `;
 
       const response = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
+        model: "gemini-3.6-flash",
         contents: prompt,
         config: {
           responseMimeType: "application/json",
@@ -1357,7 +1718,9 @@ async function startServer() {
         }
       });
 
-      const learningModule = JSON.parse(response.text?.trim() || "{}");
+      const _text4 = response.text || "{}";
+      const _cleanJson4 = _text4.replace(/```json/g, "").replace(/```/g, "").trim();
+      const learningModule = JSON.parse(_cleanJson4);
       
       // Inject IDs
       learningModule.mcqs = learningModule.mcqs.map((q: any, i: number) => ({ ...q, id: `mcq-${Date.now()}-${i}` }));
@@ -1372,6 +1735,96 @@ async function startServer() {
     } catch (error: any) {
       console.error("Quiz generation failed:", error);
       res.status(500).json({ error: "Quiz generation failed", details: error.message });
+    }
+  });
+
+  // Generate Editorial using AI
+  app.post("/api/admin/editorials/generate", async (req, res) => {
+    try {
+      const { topic, criteria, category, region } = req.body;
+      const ai = getGeminiClient();
+      
+      const prompt = `
+      You are an expert Chief Medical Editor for HealicWire.
+      Write a highly detailed, evidence-based editorial article on the topic: "${topic}".
+      Additional criteria or focus: ${criteria || "None provided"}.
+      Category: ${category}. Region: ${region}.
+      
+      Output a strict JSON object with these exact keys:
+      {
+        "headline": "A captivating, professional editorial title",
+        "subhead": "A strong subtitle",
+        "summary30s": "A 30-second summary (about 30 words)",
+        "bodyAnalysis": "A detailed 1300-word editorial in Markdown format. Use professional tone, headers, and bullet points where appropriate.",
+        "readingTimeMinutes": 6
+      }
+      `;
+
+      const response = await ai.models.generateContent({
+        model: "gemini-3.6-flash",
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+          temperature: 0.3
+        }
+      });
+
+      const _text = response.text || "{}";
+      const _cleanJson = _text.replace(/```json/g, "").replace(/```/g, "").trim();
+      const article = JSON.parse(_cleanJson);
+
+      res.json({ success: true, article });
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Submit Editorial
+  app.post("/api/admin/editorials", async (req, res) => {
+    try {
+      const payload = {
+        id: "ed-" + Date.now(),
+        slug: req.body.headline.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""),
+        headline: req.body.headline,
+        subhead: req.body.subhead,
+        category: req.body.category || "Editorial",
+        specialties: req.body.specialties || [],
+        region: req.body.region || "Global",
+        image_url: req.body.imageUrl || "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=800&q=80",
+        image_credit: req.body.imageCredit || "Editorial Photo",
+        published_at: req.body.status === 'published' ? new Date().toISOString() : null,
+        status: req.body.status || "draft",
+        author_name: "Dr. K. Narayana, MD, DM",
+        reading_time_minutes: req.body.readingTimeMinutes || 5,
+        summary_30s: req.body.summary30s,
+        body_analysis: req.body.bodyAnalysis,
+        clinical_impact_score: req.body.clinicalImpactScore || 8,
+        created_at: new Date().toISOString()
+      };
+      
+      const { data, error } = await supabaseAdmin.from('editorials').insert([payload]).select();
+      if (error) {
+        // Fallback: If editorials table doesn't exist, try saving to articles with category Editorial
+        if (error.code === '42P01' || error.message.includes('does not exist')) {
+            console.log("Editorials table missing, falling back to articles table");
+            const articlePayload = {
+              ...payload,
+              source_name: "HealicWire Editorial Board",
+              source_url: "#",
+              evidence_level: "Editorial",
+              is_ai_assisted: true
+            };
+            const { data: artData, error: artError } = await supabaseAdmin.from('articles').insert([articlePayload]).select();
+            if (artError) throw artError;
+            return res.status(201).json(artData[0]);
+        }
+        throw error;
+      }
+      res.status(201).json(data[0]);
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
     }
   });
 

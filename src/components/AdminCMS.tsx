@@ -57,6 +57,37 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
   >("catalog");
 
   // Editorial Form State
+  const [bulkNewsDate, setBulkNewsDate] = useState(new Date().toISOString().split("T")[0]);
+  const [bulkNewsCount, setBulkNewsCount] = useState(1);
+  const [isBulkGenerating, setIsBulkGenerating] = useState(false);
+  const [bulkNewsMessage, setBulkNewsMessage] = useState<string | null>(null);
+
+  const handleBulkNewsSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsBulkGenerating(true);
+    setBulkNewsMessage(null);
+    fetch("/api/generate-bulk-news", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ targetDate: bulkNewsDate, count: bulkNewsCount })
+    })
+      .then(res => res.json())
+      .then(data => {
+        setIsBulkGenerating(false);
+        if (data.success) {
+          setBulkNewsMessage(`Successfully generated and published ${data.count} news items for ${bulkNewsDate}.`);
+          fetchData();
+        } else {
+          setBulkNewsMessage(`Failed: ${data.error}`);
+        }
+      })
+      .catch(err => {
+        setIsBulkGenerating(false);
+        setBulkNewsMessage("Server error while generating news.");
+        console.error(err);
+      });
+  };
+
   const [editorialForm, setEditorialForm] = useState({
     headline: "",
     subhead: "",
@@ -174,7 +205,7 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
   const fetchUploadedImages = () => {
     fetch("/api/admin/uploaded-images")
       .then(res => res.json())
-      .then(data => setUploadedImagesList(data || []))
+      .then(data => setUploadedImagesList(Array.isArray(data) ? data : []))
       .catch(err => console.error(err));
   };
 
@@ -269,7 +300,7 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
   const fetchCreatedEventsList = () => {
     fetch("/api/scientific-events")
       .then(res => res.json())
-      .then(data => setCreatedEventsList(data || []))
+      .then(data => setCreatedEventsList(Array.isArray(data) ? data : []))
       .catch(err => console.error(err));
   };
 
@@ -505,19 +536,19 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
     fetch("/api/articles?status=all")
       .then(res => res.json())
       .then(data => {
-        setArticles(data);
+        setArticles(Array.isArray(data) ? data : []);
         setLoading(false);
       })
       .catch(err => console.error(err));
 
     fetch("/api/admin/corrections")
       .then(res => res.json())
-      .then(data => setCorrections(data))
+      .then(data => setCorrections(Array.isArray(data) ? data : []))
       .catch(err => console.error(err));
 
     fetch("/api/admin/event-assets")
       .then(res => res.json())
-      .then(data => setEventAssets(data))
+      .then(data => setEventAssets(Array.isArray(data) ? data : []))
       .catch(err => console.error(err));
   };
 
@@ -991,7 +1022,7 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
                 >
                   <div className="flex items-center space-x-2.5">
                     <Wand2 className="w-4 h-4 text-indigo-600" />
-                    <span>Generate News</span>
+                    <span>Generate Specialty News</span>
                   </div>
                   <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-indigo-100 text-indigo-700 font-bold">
                     AI
@@ -1120,9 +1151,9 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
           <div className="bg-white dark:bg-zinc-950 px-8 py-6 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between shrink-0">
             <div>
               <h1 className="text-2xl font-bold text-zinc-900 dark:text-white font-sans tracking-tight">
-                {activeTab === "catalog" && "Blog Publications Engine"}
+                {activeTab === "catalog" && "Global Healthcare News Generat Engine"}
                 {activeTab === "write_editorial" && "Write Editorial Article"}
-                {activeTab === "generate_news" && "AI Medical News Generator"}
+                {activeTab === "generate_news" && "Generate Specialty News"}
                 {activeTab === "create_pages" && "Create Portal Pages"}
                 {activeTab === "create_scientific_events" && "Create Scientific Events Page"}
                 {activeTab === "upload_images" && "Google Cloud Storage Asset Manager"}
@@ -1139,14 +1170,6 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
 
             {/* Quick Action Buttons Header Bar */}
             <div className="flex items-center space-x-3">
-              <button
-                onClick={() => { setActiveTab("generate_news"); setEditingArticle(null); }}
-                className="px-3.5 py-2 rounded-lg bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800 text-xs font-semibold flex items-center space-x-1.5 hover:bg-indigo-100 transition-all"
-              >
-                <Wand2 className="w-3.5 h-3.5 text-indigo-600" />
-                <span>Bulk AI News</span>
-              </button>
-
               <button
                 onClick={() => { setActiveTab("write_editorial"); setEditingArticle(null); }}
                 className="px-4 py-2 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-xs font-bold flex items-center space-x-1.5 hover:bg-zinc-800 transition-all shadow-xs"
@@ -2777,6 +2800,54 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
                 {/* 5. GLOBAL HEALTHCARE NEWS GENERATE TAB */}
                 {activeTab === "catalog" && (
                   <div className="space-y-6">
+                    {/* Bulk Generation UI */}
+                    <div className="bg-white dark:bg-zinc-950 p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-2xs">
+                      <div className="flex items-center space-x-2 mb-4">
+                        <Wand2 className="w-5 h-5 text-indigo-600" />
+                        <h3 className="font-bold text-zinc-900 dark:text-white uppercase font-mono">Bulk Global Healthcare News Generate</h3>
+                      </div>
+                      <p className="text-xs text-zinc-500 mb-6">
+                        Automatically generate detailed 800-word news articles based on global and Indian healthcare updates from the past 24 hours. The articles will be fully populated and saved to the database.
+                      </p>
+                      
+                      <form onSubmit={handleBulkNewsSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                        <div>
+                          <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mb-1 uppercase font-mono">Target Date</label>
+                          <input 
+                            type="date" 
+                            required 
+                            value={bulkNewsDate}
+                            onChange={(e) => setBulkNewsDate(e.target.value)}
+                            className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 text-xs"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mb-1 uppercase font-mono">No. of News</label>
+                          <input 
+                            type="number" 
+                            required 
+                            min={1}
+                            max={100}
+                            value={bulkNewsCount}
+                            onChange={(e) => setBulkNewsCount(Number(e.target.value))}
+                            className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 text-xs"
+                          />
+                        </div>
+                        <button 
+                          type="submit" 
+                          disabled={isBulkGenerating}
+                          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold font-mono tracking-wider flex justify-center items-center h-[34px]"
+                        >
+                          {isBulkGenerating ? "Generating..." : "Generate News"}
+                        </button>
+                      </form>
+                      {bulkNewsMessage && (
+                        <div className="mt-4 p-3 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 text-xs rounded-lg border border-emerald-200 dark:border-emerald-800">
+                          {bulkNewsMessage}
+                        </div>
+                      )}
+                    </div>
+
                     <div className="flex items-center justify-between bg-white dark:bg-zinc-950 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-2xs">
                       <div className="flex items-center space-x-3">
                         <div className="p-2 rounded-lg bg-emerald-50 text-emerald-600 font-bold text-xs">
@@ -2784,7 +2855,7 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
                         </div>
                         <div>
                           <h3 className="text-xs font-bold text-zinc-900 dark:text-white uppercase font-mono">
-                            Global Healthcare News Generate
+                            Published Catalog
                           </h3>
                           <span className="text-[11px] text-zinc-500 font-mono">
                             {catalog.length} published news items • Displays on main landing page under Global Healthcare News & Intel

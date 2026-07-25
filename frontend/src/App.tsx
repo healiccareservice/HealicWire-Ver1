@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { Component, useState, useEffect } from "react";
-import { Sparkles, Activity, ShieldAlert, BookOpen, Search, User, SlidersHorizontal, Eye, Star, Heart, FileText, CheckCircle, Mail, HelpCircle, Landmark, Bell, AlertTriangle, UserCheck, ChevronRight, ChevronDown } from "lucide-react";
+import React, { Component, useState, useEffect, useRef } from "react";
+import { Sparkles, Activity, ShieldAlert, BookOpen, Search, User, SlidersHorizontal, Eye, Star, Heart, FileText, CheckCircle, Mail, HelpCircle, Landmark, Bell, AlertTriangle, UserCheck, ChevronRight, ChevronDown, Clock, ChevronLeft } from "lucide-react";
 import HealicLogo from "./components/HealicLogo";
 import Header from "./components/Header";
 import ArticleCard from "./components/ArticleCard";
@@ -17,6 +17,7 @@ import ScientificEvents from "./components/ScientificEvents";
 import ScientificEventPage from "./components/ScientificEventPage";
 import PortalPage from "./components/PortalPage";
 import EditorialsPage from "./components/EditorialsPage";
+import ClinicalInsightsPage from "./components/ClinicalInsightsPage";
 import WhatWeDoSlider from "./components/WhatWeDoSlider";
 import Login from "./components/Login";
 import { supabase, mapArticleFromDB, mapAlertFromDB } from "./lib/supabase";
@@ -107,6 +108,8 @@ export default function App() {
     }
   } else if (currentPath.startsWith("/editorials")) {
     currentTab = "editorials";
+  } else if (currentPath.startsWith("/clinicalinsights")) {
+    currentTab = "clinical-insights";
   } else if (currentPath.startsWith("/guidelines")) {
     currentTab = "guidelines";
     if (currentPath.startsWith("/guidelines/")) {
@@ -138,6 +141,7 @@ export default function App() {
     if (tab === "treatment-updates") newPath = "/treatmentupdate";
     else if (tab === "events") newPath = "/scientificevents";
     else if (tab === "editorials") newPath = "/editorials";
+    else if (tab === "clinical-insights") newPath = "/clinicalinsights";
     else if (tab === "guidelines") newPath = "/guidelines";
     else if (tab === "pharma-drugs") newPath = "/pharmadrugs";
     else if (tab === "alerts") newPath = "/alerts";
@@ -160,6 +164,16 @@ export default function App() {
   // Core data states
   const [articles, setArticles] = useState<Article[]>([]);
   const [alerts, setAlerts] = useState<HospitalAlert[]>([]);
+  
+  const clinicalInsightsScrollRef = useRef<HTMLDivElement>(null);
+  const scrollClinicalInsights = (direction: 'left' | 'right') => {
+    if (clinicalInsightsScrollRef.current) {
+      const scrollAmount = window.innerWidth < 640 ? 300 : 380;
+      clinicalInsightsScrollRef.current.scrollBy({ left: direction === 'left' ? -scrollAmount : scrollAmount, behavior: 'smooth' });
+    }
+  };
+  const [latestEditorial, setLatestEditorial] = useState<Article | null>(null);
+  const [clinicalInsights, setClinicalInsights] = useState<Article[]>([]);
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
 
   // Interface overlays
@@ -203,6 +217,8 @@ export default function App() {
 
     fetchArticles();
     fetchAlerts();
+    fetchLatestEditorial();
+    fetchClinicalInsights();
   }, []);
 
   const fetchArticles = async () => {
@@ -235,6 +251,112 @@ export default function App() {
       }
     } catch (err) {
       console.error("Failed to fetch alerts:", err);
+    }
+  };
+
+  const fetchLatestEditorial = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('editorials')
+        .select('*')
+        .eq('status', 'published')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      let finalData = data;
+      if (!data) {
+        console.warn("Editorials table missing or empty, falling back to articles table for latest editorial");
+        const { data: artData, error: artError } = await supabase
+          .from('articles')
+          .select('*')
+          .eq('category', 'Editorial')
+          .eq('status', 'published')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+          
+        if (!artError) {
+          finalData = artData;
+        }
+      }
+
+      if (finalData) {
+        setLatestEditorial(mapArticleFromDB(finalData));
+      }
+    } catch (err) {
+      console.error("Failed to fetch latest editorial:", err);
+    }
+  };
+
+  const fetchClinicalInsights = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('clinical_insights')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      let finalData = data;
+      if (!data || data.length === 0) {
+        console.warn("Clinical insights table missing or empty, falling back to articles table");
+        const { data: artData } = await supabase
+          .from('articles')
+          .select('*')
+          .eq('category', 'Clinical Insights')
+          .eq('status', 'published')
+          .order('created_at', { ascending: false });
+        finalData = artData;
+      }
+
+      if (finalData && finalData.length > 0) {
+        const authorsMap: Record<string, any> = {
+          "Advances in Continuous Glucose Monitoring (CGM) for Type 2 Diabetes Management": { name: 'Dr. Priya Nair', qual: 'MBBS, MD (General Medicine), DM (Endocrinology)', title: 'Consultant Endocrinologist & Diabetologist', image: 'https://randomuser.me/api/portraits/women/44.jpg' },
+          "Redefining HFpEF Management: From Diagnostic Dilemmas to Targeted Phenotype-Driven Pharmacotherapy": { name: 'Dr. Arjun Sharma', qual: 'MBBS, MD (General Medicine), DM (Cardiology)', title: 'Consultant Cardiologist', image: 'https://randomuser.me/api/portraits/men/32.jpg' },
+          "Optimizing Disease-Modifying Therapy in Early-Stage Alzheimer's Disease: Biomarker Protocols, Amyloid-Related Imaging Abnormalities (ARIA), and Practical Management Algorithms": { name: 'Dr. Rahul Mehta', qual: 'MBBS, MD (General Medicine), DM (Neurology)', title: 'Consultant Neurologist', image: 'https://randomuser.me/api/portraits/men/45.jpg' },
+          "SGLT2 Inhibitors and Non-Diabetic Chronic Kidney Disease: Redefining Renal Protection and Clinical Pathways": { name: 'Dr. Sneha Iyer', qual: 'MBBS, MD (General Medicine), DM (Nephrology)', title: 'Consultant Nephrologist', image: 'https://randomuser.me/api/portraits/women/68.jpg' },
+          "Paradigm Shift in MASH Management: Integrating Targeted Pharmacotherapy and Incretin Agonists into Gastroenterology Practice": { name: 'Dr. Vikram Reddy', qual: 'MBBS, MD (General Medicine), DM (Gastroenterology)', title: 'Consultant Gastroenterologist', image: 'https://randomuser.me/api/portraits/men/22.jpg' },
+          "Redefining the HER2 Paradigm: Clinical Insights into Antibody-Drug Conjugates for HER2-Low Metastatic Breast Cancer": { name: 'Dr. Ananya Banerjee', qual: 'MBBS, MD (General Medicine), DM (Medical Oncology)', title: 'Consultant Medical Oncologist', image: 'https://randomuser.me/api/portraits/women/33.jpg' },
+          "Navigating Relapsed/Refractory Multiple Myeloma: The Paradigm Shift Towards Bispecific T-Cell Engagers and CAR-T Therapies": { name: 'Dr. Karthik Rao', qual: 'MBBS, MD (General Medicine), DM (Clinical Hematology)', title: 'Consultant Hematologist', image: 'https://randomuser.me/api/portraits/men/55.jpg' },
+          "Resetting the Autoreactive Immune Memory: CD19-Targeted CAR-T Cell Therapy and B-Cell Depletion Paradigms in Refractory Systemic Lupus Erythematosus": { name: 'Dr. Meera Joshi', qual: 'MBBS, MD (General Medicine), DM (Clinical Immunology & Rheumatology)', title: 'Consultant Rheumatologist', image: 'https://randomuser.me/api/portraits/women/29.jpg' },
+          "Navigating Phenotypic Heterogeneity in Severe Refractory Asthma: Precision Biologic Selection and Biomarker Integration": { name: 'Dr. Sandeep Kulkarni', qual: 'MBBS, MD (General Medicine), DM (Pulmonary, Critical Care & Sleep Medicine)', title: 'Consultant Pulmonologist', image: 'https://randomuser.me/api/portraits/men/66.jpg' },
+          "First-Line Whole Genome Sequencing in Undiagnosed Genetic Disorders: Shifting the Paradigm from Diagnostic Odysseys to Precision Medicine": { name: 'Dr. Ritu Verma', qual: 'MBBS, MD (General Medicine), DM (Medical Genetics)', title: 'Consultant Medical Geneticist', image: 'https://randomuser.me/api/portraits/women/12.jpg' },
+          "Paradigm Shift in Endourology: Thulium Fiber Laser versus Holmium:YAG Laser in Urolithiasis and BPH Management": { name: 'Dr. Nikhil Desai', qual: 'MBBS, MS (General Surgery), MCh (Urology)', title: 'Consultant Urologist', image: 'https://randomuser.me/api/portraits/men/17.jpg' },
+          "Awake Craniotomy and Intraoperative Functional Mapping: Balancing Oncological Resection with Functional Preservation in Eloquent Cortex Gliomas": { name: 'Dr. Pooja Kapoor', qual: 'MBBS, MS (General Surgery), MCh (Neurosurgery)', title: 'Consultant Neurosurgeon', image: 'https://randomuser.me/api/portraits/women/55.jpg' },
+          "Evolving Paradigms in Mitral Valve Repair: Minimally Invasive Thoracoscopic vs. Conventional Median Sternotomy Approaches": { name: 'Dr. Ajay Menon', qual: 'MBBS, MS (General Surgery), MCh (Cardiothoracic & Vascular Surgery)', title: 'Consultant Cardiothoracic Surgeon', image: 'https://randomuser.me/api/portraits/men/19.jpg' },
+          "Navigating Organ Preservation in Locally Advanced Rectal Cancer: A Surgical Oncologist’s Perspective on Total Neoadjuvant Therapy and the Watch-and-Wait Protocol": { name: 'Dr. Kavita Patil', qual: 'MBBS, MS (General Surgery), MCh (Surgical Oncology)', title: 'Consultant Surgical Oncologist', image: 'https://randomuser.me/api/portraits/women/22.jpg' },
+          "Targeted Muscle Reinnervation (TMR) and Regenerative Peripheral Nerve Interfaces (RPNI): Paradigm Shifts in Neuroma Prevention and Amputee Rehabilitation": { name: 'Dr. Rohit Chandra', qual: 'MBBS, MS (General Surgery), MCh (Plastic & Reconstructive Surgery)', title: 'Consultant Plastic & Reconstructive Surgeon', image: 'https://randomuser.me/api/portraits/men/12.jpg' },
+          "Navigating the Paradigm Shift in Pediatric Developmental and Epileptic Encephalopathies: From Anti-Seizure Medications to Precision Disease-Modifying Therapies": { name: 'Dr. Neha Gupta', qual: 'MBBS, MD (Pediatrics), DM (Pediatric Neurology)', title: 'Consultant Pediatric Neurologist', image: 'https://randomuser.me/api/portraits/women/61.jpg' },
+          "Navigating Carbapenem-Resistant Enterobacterales (CRE) Infections: Newer Beta-Lactam/Beta-Lactamase Inhibitor Combinations and Stewardship Strategies": { name: 'Dr. Harish Bhat', qual: 'MBBS, MD (General Medicine), DM (Infectious Diseases)', title: 'Consultant Infectious Disease Specialist', image: 'https://randomuser.me/api/portraits/men/77.jpg' },
+          "Navigating DOAC Dosing Dilemmas in Extreme Obesity and End-Stage Kidney Disease: A Pharmacokinetic and Pharmacodynamic Paradigm Shift": { name: 'Dr. Shalini Krishnan', qual: 'MBBS, MD (General Medicine), DM (Clinical Pharmacology)', title: 'Consultant Clinical Pharmacologist', image: 'https://randomuser.me/api/portraits/women/88.jpg' },
+          "Navigating Heterogeneity in Septic Shock: Phenotype-Driven Resuscitation and Hemodynamic Tailoring in the Modern ICU": { name: 'Dr. Vivek Agarwal', qual: 'MBBS, MD (General Medicine), DM (Critical Care Medicine)', title: 'Consultant Intensivist & Critical Care Specialist', image: 'https://randomuser.me/api/portraits/men/91.jpg' },
+          "Genicular Artery Embolization (GAE) in Knee Osteoarthritis: Clinical Efficacy, Technical Nuances, and Practice Takeaways": { name: 'Dr. Aditi Singh', qual: 'MBBS, MD (Radiodiagnosis), Fellowship in Interventional Radiology', title: 'Consultant Interventional Radiologist', image: 'https://randomuser.me/api/portraits/women/90.jpg' }
+        };
+
+        const mappedInsights = finalData.map((insightData: any) => {
+          const headline = insightData.article_title || insightData.headline;
+          const mappedAuthor = authorsMap[headline];
+
+          return {
+            id: insightData.id,
+            slug: insightData.id,
+            headline: headline,
+            summary30s: insightData.recent_clinical_update || insightData.summary30s,
+            bodyAnalysis: insightData.detailed_article ? `${insightData.detailed_article}\n\n### Why This Matters\n${insightData.why_this_matters}\n\n### Clinical Pearls\n${insightData.clinical_pearls}\n\n### Future Directions\n${insightData.future_directions}\n\n### Evidence Summary\n${insightData.evidence_summary}\n\n### References\n${insightData.references}` : insightData.bodyAnalysis,
+            category: 'Clinical Insights',
+            publishedAt: insightData.created_at || insightData.published_at || new Date().toISOString(),
+            status: 'published',
+            sourceName: 'HealicWire Experts Board',
+            author_name: mappedAuthor ? mappedAuthor.name : insightData.author_name,
+            author_qualifications: mappedAuthor ? mappedAuthor.qual : insightData.author_qualifications,
+            author_title: mappedAuthor ? mappedAuthor.title : insightData.author_title,
+            author_image: mappedAuthor ? mappedAuthor.image : "https://randomuser.me/api/portraits/women/44.jpg"
+          } as Article & { author_image?: string };
+        });
+
+        setClinicalInsights(mappedInsights);
+      }
+    } catch (err) {
+      console.error("Failed to fetch clinical insights:", err);
     }
   };
 
@@ -406,6 +528,9 @@ export default function App() {
         ) : currentTab === "editorials" ? (
           /* Render Editorials Page */
           <EditorialsPage onSelectArticle={setSelectedArticle} />
+        ) : currentTab === "clinical-insights" ? (
+          /* Render Clinical Insights Page */
+          <ClinicalInsightsPage onSelectArticle={setSelectedArticle} />
         ) : currentTab === "guidelines" ? (
           /* Render Current Guidelines */
           <LivingGuidelines />
@@ -679,67 +804,189 @@ export default function App() {
             <div className="space-y-8">
               
               {/* EDITORIALS SECTION WITH PHOTO & EDITOR INFORMATION */}
-              <div 
-                onClick={() => setCurrentTab("editorials")}
-                className="bg-white dark:bg-zinc-950 p-5 rounded-xl border border-teal-200/80 dark:border-teal-800/80 shadow-sm space-y-4 font-sans cursor-pointer hover:border-teal-500 transition-all"
-              >
-                {/* Card Header */}
-                <div className="flex items-center justify-between pb-2.5 border-b border-zinc-100 dark:border-zinc-900">
-                  <div className="flex items-center space-x-2">
-                    <UserCheck className="w-4 h-4 text-teal-600 dark:text-teal-400" />
-                    <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-900 dark:text-white">
-                      Editorials
-                    </h3>
-                  </div>
-                  <span className="px-2 py-0.5 rounded text-[9px] font-mono font-extrabold bg-teal-100 dark:bg-teal-950 text-teal-700 dark:text-teal-300 uppercase">
-                    Chief Column
-                  </span>
-                </div>
-
-                {/* Editor Profile & Information */}
-                <div className="flex items-center space-x-3 bg-teal-50/60 dark:bg-teal-950/30 p-3 rounded-xl border border-teal-100 dark:border-teal-900/40">
-                  <img
-                    src="https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&w=200&q=80"
-                    alt="Dr. K. Narayana"
-                    className="w-13 h-13 rounded-full object-cover border-2 border-teal-600 shadow-md shrink-0"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <h4 className="text-xs font-extrabold text-zinc-900 dark:text-white truncate">
-                      Dr. K. Narayana, MD, DM
-                    </h4>
-                    <p className="text-[10px] font-mono text-teal-700 dark:text-teal-400 font-bold leading-tight">
-                      Editor-in-Chief & Lead Strategist
-                    </p>
-                    <p className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate mt-0.5">
-                      HealicWire Editorial Directorate
-                    </p>
-                  </div>
-                </div>
-
-                {/* Latest Featured Editorial Brief */}
-                {(() => {
-                  const latestEditorial = articles.find(a => a.category === "Research" || a.category === "Clinical" || a.sourceName?.includes("Editorial")) || articles[0];
-                  
-                  return latestEditorial ? (
-                    <div className="group p-3 rounded-xl bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/60 group-hover:border-teal-500 transition-all space-y-1.5">
-                      <div className="flex items-center justify-between text-[9px] font-mono text-teal-600 dark:text-teal-400 font-bold uppercase">
-                        <span>FEATURED EDITORIAL NOTE</span>
-                        <span>Jul 2026</span>
+              {(() => {
+                if (!latestEditorial) {
+                  return (
+                    <div>
+                      <div className="flex items-center gap-3 mb-3">
+                        <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wider font-mono shrink-0">Editorial</h3>
+                        <p className="text-[9px] font-bold text-zinc-500 dark:text-zinc-400 leading-tight border-l-2 border-teal-500/30 pl-2.5">
+                          Editorial presents thought-provoking perspectives from the HealicWire Editorial Board on emerging healthcare trends, clinical practice, medical education, research, and health policy
+                        </p>
                       </div>
-                      <h4 className="text-xs font-extrabold text-zinc-850 dark:text-zinc-150 group-hover:text-teal-600 transition-colors leading-snug line-clamp-2">
-                        {latestEditorial.headline}
-                      </h4>
-                      <p className="text-[11px] text-zinc-600 dark:text-zinc-400 line-clamp-2 italic font-serif leading-relaxed">
-                        &ldquo;Establishing evidence-based guardrails while integrating modern AI protocols into Indian clinical workflows.&rdquo;
-                      </p>
-                      <div className="pt-1 flex items-center text-[10px] font-mono font-bold text-teal-600 dark:text-teal-400 group-hover:underline">
-                        <span>Read All Editorials</span>
-                        <ChevronRight className="w-3 h-3 ml-0.5" />
+                      <div className="bg-zinc-50 dark:bg-zinc-900/20 p-6 rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800 flex flex-col items-center justify-center text-center space-y-2 h-32">
+                        <span className="text-[10px] text-zinc-400 font-mono font-bold uppercase tracking-widest">Editorials</span>
+                        <p className="text-xs text-zinc-500 font-sans">No editorials published yet.</p>
                       </div>
                     </div>
-                  ) : null;
-                })()}
-              </div>
+                  );
+                }
+
+                return (
+                  <div>
+                    <div className="flex items-center gap-3 mb-3">
+                      <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wider font-mono shrink-0">Editorial</h3>
+                      <p className="text-[9px] font-bold text-zinc-500 dark:text-zinc-400 leading-tight border-l-2 border-teal-500/30 pl-2.5">
+                        Editorial presents thought-provoking perspectives from the HealicWire Editorial Board on emerging healthcare trends, clinical practice, medical education, research, and health policy
+                      </p>
+                    </div>
+                    <div 
+                      className="bg-white dark:bg-zinc-950 p-4 rounded-xl border border-teal-200/80 dark:border-teal-800/80 shadow-sm space-y-3 font-sans cursor-pointer group hover:border-teal-500 transition-all" 
+                      onClick={() => setCurrentTab("editorials")}
+                    >
+                      {/* Author Profile Banner - Integrated inside the box */}
+                      <div className="p-4 rounded-xl bg-gradient-to-r from-teal-900/10 via-emerald-900/10 to-cyan-900/10 dark:from-teal-950/50 dark:via-emerald-950/50 dark:to-cyan-950/50 border border-teal-200/50 dark:border-teal-800/50 shadow-xs flex flex-col items-center text-center sm:flex-row sm:text-left sm:items-center gap-3 transition-colors">
+                        <img
+                          src="https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&w=400&q=80"
+                          alt="Dr. K. Narayana"
+                          className="w-14 h-14 rounded-full object-cover border-2 border-teal-600 shadow-sm shrink-0"
+                        />
+                        <div className="space-y-0.5 flex-1">
+                          <h2 className="text-sm font-extrabold text-zinc-900 dark:text-white">
+                            Dr. K. Narayana
+                          </h2>
+                          <p className="text-[9px] font-mono text-zinc-600 dark:text-zinc-400 font-semibold tracking-wide">
+                            MBBS, MD, DM
+                          </p>
+                          <p className="text-[10px] font-sans text-teal-700 dark:text-teal-400 font-bold">
+                            Editor-in-Chief & Lead Strategist
+                          </p>
+                        </div>
+                      </div>
+
+                      <article
+                        className="bg-zinc-50 dark:bg-zinc-900/40 rounded-xl border border-zinc-200/80 dark:border-zinc-850/80 shadow-xs transition-all overflow-hidden flex flex-col justify-between"
+                      >
+                        <div className="p-4 space-y-2">
+                          {/* Headline */}
+                          <h2 className="text-base font-extrabold text-zinc-900 dark:text-white font-serif leading-snug">
+                            {latestEditorial.headline}
+                          </h2>
+
+                          {/* 30-Second Summary */}
+                          <p className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed font-sans line-clamp-2">
+                            {latestEditorial.summary30s}
+                          </p>
+                        </div>
+
+                        {/* Footer Action Strip */}
+                        <div className="px-4 py-2.5 bg-white dark:bg-zinc-950 border-t border-zinc-100 dark:border-zinc-900 flex flex-wrap items-center justify-between text-[11px]">
+                          <div className="flex items-center space-x-1 font-mono font-bold text-teal-600 dark:text-teal-400 group-hover:underline">
+                            <span>Read Clinical Analysis</span>
+                            <ChevronRight className="w-3 h-3" />
+                          </div>
+                        </div>
+                      </article>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* CLINICAL INSIGHTS SECTION WITH PHOTO & EDITOR INFORMATION */}
+              {(() => {
+                if (clinicalInsights.length === 0) {
+                  return (
+                    <div>
+                      <div className="flex items-center gap-3 mb-3">
+                        <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wider font-mono shrink-0">Clinical Insights</h3>
+                        <p className="text-[9px] font-bold text-zinc-500 dark:text-zinc-400 leading-tight border-l-2 border-teal-500/30 pl-2.5">
+                          Curated articles by experts associated with HealicWire, translating medical evidence into practical, evidence-based clinical insights
+                        </p>
+                      </div>
+                      <div className="bg-zinc-50 dark:bg-zinc-900/20 p-6 rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800 flex flex-col items-center justify-center text-center space-y-2 h-32">
+                        <span className="text-[10px] text-zinc-400 font-mono font-bold uppercase tracking-widest">Clinical Insights</span>
+                        <p className="text-xs text-zinc-500 font-sans">No clinical insights published yet.</p>
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div>
+                    <div className="flex items-center justify-between gap-3 mb-3">
+                      <div className="flex items-center gap-3">
+                        <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wider font-mono shrink-0">Clinical Insights</h3>
+                        <p className="hidden sm:block text-[9px] font-bold text-zinc-500 dark:text-zinc-400 leading-tight border-l-2 border-teal-500/30 pl-2.5">
+                          Curated articles by experts associated with HealicWire, translating medical evidence into practical, evidence-based clinical insights
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button 
+                          onClick={() => scrollClinicalInsights('left')}
+                          className="p-1.5 rounded-full bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-500 hover:text-teal-600 hover:border-teal-500 transition-colors shadow-sm cursor-pointer"
+                          aria-label="Scroll left"
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                        </button>
+                        <button 
+                          onClick={() => scrollClinicalInsights('right')}
+                          className="p-1.5 rounded-full bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-500 hover:text-teal-600 hover:border-teal-500 transition-colors shadow-sm cursor-pointer"
+                          aria-label="Scroll right"
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <div 
+                      ref={clinicalInsightsScrollRef}
+                      className="flex overflow-x-auto snap-x snap-mandatory gap-4 pb-2 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] scroll-smooth"
+                    >
+                      {clinicalInsights.map((insight, idx) => (
+                        <div 
+                          key={insight.id || idx}
+                          className="min-w-[300px] sm:min-w-[380px] w-full max-w-full bg-white dark:bg-zinc-950 p-4 rounded-xl border border-teal-200/80 dark:border-teal-800/80 shadow-sm space-y-3 font-sans cursor-pointer group hover:border-teal-500 transition-all snap-center shrink-0 flex flex-col" 
+                          onClick={() => setCurrentTab("clinical-insights")}
+                        >
+                          {/* Author Profile Banner - Integrated inside the box */}
+                          <div className="p-4 rounded-xl bg-gradient-to-r from-teal-900/10 via-emerald-900/10 to-cyan-900/10 dark:from-teal-950/50 dark:via-emerald-950/50 dark:to-cyan-950/50 border border-teal-200/50 dark:border-teal-800/50 shadow-xs flex flex-col items-center text-center sm:flex-row sm:text-left sm:items-center gap-3 transition-colors">
+                            <img
+                              src={(insight as any).author_image || "https://randomuser.me/api/portraits/women/44.jpg"}
+                              alt={(insight as any).author_name || "Dr. Priya Nair"}
+                              className="w-14 h-14 rounded-full object-cover border-2 border-teal-600 shadow-sm shrink-0"
+                            />
+                            <div className="space-y-0.5 flex-1 min-w-0">
+                              <h2 className="text-sm font-extrabold text-zinc-900 dark:text-white truncate">
+                                {(insight as any).author_name || "Dr. Priya Nair"}
+                              </h2>
+                              <p className="text-[9px] font-mono text-zinc-600 dark:text-zinc-400 font-semibold tracking-wide truncate">
+                                {(insight as any).author_qualifications || "MBBS, MD (General Medicine), DM (Endocrinology)"}
+                              </p>
+                              <p className="text-[10px] font-sans text-teal-700 dark:text-teal-400 font-bold truncate">
+                                {(insight as any).author_title || "Consultant Endocrinologist & Diabetologist"}
+                              </p>
+                            </div>
+                          </div>
+
+                          <article
+                            className="bg-zinc-50 dark:bg-zinc-900/40 rounded-xl border border-zinc-200/80 dark:border-zinc-850/80 shadow-xs transition-all overflow-hidden flex flex-col flex-1"
+                          >
+                            <div className="p-4 space-y-2 flex-1">
+                              {/* Headline */}
+                              <h2 className="text-base font-extrabold text-zinc-900 dark:text-white font-serif leading-snug line-clamp-2">
+                                {insight.headline}
+                              </h2>
+
+                              {/* 30-Second Summary */}
+                              <p className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed font-sans line-clamp-2">
+                                {insight.summary30s}
+                              </p>
+                            </div>
+
+                            {/* Footer Action Strip */}
+                            <div className="px-4 py-2.5 bg-white dark:bg-zinc-950 border-t border-zinc-100 dark:border-zinc-900 flex flex-wrap items-center justify-between text-[11px] mt-auto">
+                              <div className="flex items-center space-x-1 font-mono font-bold text-teal-600 dark:text-teal-400 group-hover:underline">
+                                <span>Read Clinical Insights</span>
+                                <ChevronRight className="w-3 h-3" />
+                              </div>
+                            </div>
+                          </article>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* TODAY'S CLINICAL BRIEFING */}
               <div className="bg-white dark:bg-zinc-950 p-5 rounded-xl border border-zinc-200 dark:border-zinc-850 shadow-sm space-y-4">

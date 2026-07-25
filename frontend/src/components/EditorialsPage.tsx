@@ -7,6 +7,7 @@ import React, { useState, useEffect } from "react";
 import { UserCheck, BookOpen, Search, Sparkles, ChevronDown, ChevronUp, Bookmark, BookmarkCheck, Share2, Award, Clock, ArrowRight, CheckCircle } from "lucide-react";
 import { Article } from "../types";
 import { supabase, mapArticleFromDB } from "../lib/supabase";
+import { renderDetailedAnalysis } from "./ArticleDetail";
 
 interface EditorialsPageProps {
   onSelectArticle: (article: Article) => void;
@@ -31,18 +32,23 @@ export default function EditorialsPage({ onSelectArticle }: EditorialsPageProps)
   useEffect(() => {
     const fetchEditorials = async () => {
       try {
-        const { data, error } = await supabase.from('articles').select('*');
-        if (error) throw error;
-        if (data) {
-          const mapped = data.map(mapArticleFromDB);
-          const filtered = mapped.filter((a: Article) => 
-            a.sourceName === "HealicWire Editorial Board" ||
-            a.category === "Clinical" ||
-            a.category === "Research" ||
-            a.category === "Policy and Public Health" ||
-            a.headline?.toLowerCase().includes("editorial")
-          );
-          setEditorials(filtered.length > 0 ? filtered : mapped);
+        const { data, error } = await supabase.from('editorials').select('*').eq('status', 'published').order('created_at', { ascending: false });
+        
+        let finalData = data;
+        if (error) {
+          if (error.code === '42P01' || error.message.includes('does not exist')) {
+            console.warn("Editorials table missing, falling back to articles table");
+            const { data: artData, error: artError } = await supabase.from('articles').select('*').eq('category', 'Editorial').eq('status', 'published').order('created_at', { ascending: false });
+            if (artError) throw artError;
+            finalData = artData;
+          } else {
+            throw error;
+          }
+        }
+        
+        if (finalData) {
+          const mapped = finalData.map((e: any) => ({ ...mapArticleFromDB(e), isEditorial: true }));
+          setEditorials(mapped);
         }
       } catch (err) {
         console.error("Error loading editorials:", err);
@@ -97,36 +103,11 @@ export default function EditorialsPage({ onSelectArticle }: EditorialsPageProps)
           <span className="text-xs font-mono tracking-widest uppercase font-bold">Chief Opinion & Analysis</span>
         </div>
         <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-zinc-900 dark:text-white font-serif">
-          Editorials & Clinical Opinions
+          Editorials
         </h1>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400 max-w-2xl leading-relaxed">
           Peer-reviewed perspectives, evidence synthesis, and strategic healthcare insights authored by the HealicWire Editorial Directorate.
         </p>
-      </div>
-
-      {/* Chief Editor Profile Banner */}
-      <div className="mb-8 p-6 rounded-2xl bg-gradient-to-r from-teal-900/10 via-emerald-900/10 to-cyan-900/10 dark:from-teal-950/50 dark:via-emerald-950/50 dark:to-cyan-950/50 border border-teal-200/80 dark:border-teal-800/80 shadow-xs flex flex-col sm:flex-row items-center sm:items-start gap-5">
-        <img
-          src="https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&w=400&q=80"
-          alt="Dr. K. Narayana"
-          className="w-20 h-20 rounded-full object-cover border-3 border-teal-600 shadow-md shrink-0"
-        />
-        <div className="space-y-1.5 text-center sm:text-left flex-1">
-          <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
-            <h2 className="text-lg font-extrabold text-zinc-900 dark:text-white">
-              Dr. K. Narayana, MD, DM
-            </h2>
-            <span className="px-2.5 py-0.5 rounded text-[10px] font-mono font-bold bg-teal-600 text-white uppercase">
-              Editor-in-Chief
-            </span>
-          </div>
-          <p className="text-xs font-mono text-teal-700 dark:text-teal-400 font-bold">
-            Lead Strategist, HealicWire Editorial Board & Clinical Evidence Directorate
-          </p>
-          <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed italic font-serif pt-1">
-            &ldquo;Bridging groundbreaking clinical evidence with frontline medical practice across Indian and global healthcare systems.&rdquo;
-          </p>
-        </div>
       </div>
 
       {/* Search Bar */}
@@ -160,10 +141,30 @@ export default function EditorialsPage({ onSelectArticle }: EditorialsPageProps)
             const isSaved = savedIds.includes(ed.id);
 
             return (
-              <article
-                key={ed.id}
-                className="bg-white dark:bg-zinc-950 rounded-2xl border border-zinc-200 dark:border-zinc-850 shadow-xs hover:shadow-md transition-all overflow-hidden flex flex-col justify-between"
-              >
+              <div key={ed.id} className="space-y-3">
+                {/* Author Profile Banner - Placed above every article */}
+                <div className="p-6 rounded-2xl bg-gradient-to-r from-teal-900/10 via-emerald-900/10 to-cyan-900/10 dark:from-teal-950/50 dark:via-emerald-950/50 dark:to-cyan-950/50 border border-teal-200/80 dark:border-teal-800/80 shadow-xs flex flex-col sm:flex-row items-center sm:items-start gap-5">
+                  <img
+                    src="https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&w=400&q=80"
+                    alt="Dr. K. Narayana"
+                    className="w-20 h-20 rounded-full object-cover border-3 border-teal-600 shadow-md shrink-0"
+                  />
+                  <div className="space-y-1.5 text-center sm:text-left flex-1">
+                    <h2 className="text-lg font-extrabold text-zinc-900 dark:text-white">
+                      Dr. K. Narayana
+                    </h2>
+                    <p className="text-xs font-mono text-zinc-600 dark:text-zinc-400 font-semibold tracking-wide">
+                      MBBS, MD, DM
+                    </p>
+                    <p className="text-sm font-sans text-teal-700 dark:text-teal-400 font-bold">
+                      Editor-in-Chief & Lead Strategist
+                    </p>
+                  </div>
+                </div>
+
+                <article
+                  className="bg-white dark:bg-zinc-950 rounded-2xl border border-zinc-200 dark:border-zinc-850 shadow-xs hover:shadow-md transition-all overflow-hidden flex flex-col justify-between"
+                >
                 {/* Header Row */}
                 <div className="p-6 space-y-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -213,11 +214,11 @@ export default function EditorialsPage({ onSelectArticle }: EditorialsPageProps)
                   {/* Expanded Body Analysis */}
                   {isExpanded && (
                     <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-900 space-y-3 animate-fadeIn">
-                      <h4 className="text-xs font-mono font-bold uppercase text-teal-700 dark:text-teal-400">
+                      <h4 className="text-xs font-mono font-bold uppercase text-teal-700 dark:text-teal-400 mb-4">
                         Detailed Clinical Analysis & Practice Takeaways
                       </h4>
-                      <div className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-300 leading-relaxed whitespace-pre-line font-sans">
-                        {ed.bodyAnalysis || ed.summary30s}
+                      <div className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-300 leading-relaxed font-sans -mt-4">
+                        {renderDetailedAnalysis(ed.bodyAnalysis || ed.summary30s, ed.id, "default")}
                       </div>
                     </div>
                   )}
@@ -243,17 +244,10 @@ export default function EditorialsPage({ onSelectArticle }: EditorialsPageProps)
                     >
                       {isSaved ? <BookmarkCheck className="w-4 h-4 text-amber-500" /> : <Bookmark className="w-4 h-4" />}
                     </button>
-
-                    <button
-                      onClick={() => onSelectArticle(ed)}
-                      className="px-3.5 py-1.5 bg-teal-700 hover:bg-teal-800 text-white rounded-lg font-mono text-xs font-bold transition-all flex items-center space-x-1 shadow-2xs"
-                    >
-                      <span>View Full Article</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </button>
                   </div>
                 </div>
               </article>
+            </div>
             );
           })}
         </div>
