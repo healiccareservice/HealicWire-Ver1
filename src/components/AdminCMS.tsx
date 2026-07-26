@@ -564,7 +564,7 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
       a.headline.startsWith("Scientific Events:") ||
       a.headline.startsWith("Pharma and Drugs:") ||
       a.headline.startsWith("Hospital Intelligence:") ||
-      a.headline.startsWith("Living Guidelines:") ||
+      a.headline.startsWith("Current Guidelines:") ||
       a.headline.startsWith("Any Other:")
     );
 

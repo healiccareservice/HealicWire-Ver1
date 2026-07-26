@@ -144,6 +144,26 @@ export interface Article {
   author_name?: string;
   author_qualifications?: string;
   author_title?: string;
+  seoDescription?: string;
+  keywords?: string[];
+  providerId?: string;
+}
+
+export interface Provider {
+  id: string;
+  name: string;
+  providerType: string;
+  region?: string;
+  location?: string;
+  establishedYear?: number;
+  websiteUrl?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  bedCapacity?: number;
+  accreditations?: string[];
+  servicesOffered?: string[];
+  description?: string;
+  logoUrl?: string;
 }
 
 export interface LivingGuideline {

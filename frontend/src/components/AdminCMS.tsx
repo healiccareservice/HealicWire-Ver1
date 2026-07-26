@@ -45,6 +45,7 @@ import { Article, EvidenceLevel, Region } from "../types";
 
 interface AdminCMSProps {
   onClose: () => void;
+  session?: any;
 }
 
 export default function AdminCMS({ onClose }: AdminCMSProps) {
@@ -312,6 +313,7 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
     organizer: "HealicWire Academic Directorate",
     scope: "Nationwide" as "Nationwide" | "Regional" | "Global",
     eventType: "Conference" as "Conference" | "Webinar" | "Symposium" | "Workshop" | "Grand Rounds",
+    managed: "Not Managed" as "Managed" | "Not Managed",
     startDate: new Date().toISOString().split("T")[0],
     endDate: new Date().toISOString().split("T")[0],
     venue: "Main Medical Auditorium & Virtual Stream",
@@ -363,6 +365,7 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
       organizer: evt.organizer || "HealicWire Academic Directorate",
       scope: evt.scope || "Nationwide",
       eventType: evt.eventType || "Conference",
+      managed: evt.managed || "Not Managed",
       startDate: evt.startDate || new Date().toISOString().split("T")[0],
       endDate: evt.endDate || new Date().toISOString().split("T")[0],
       venue: evt.venue || "Main Medical Auditorium",
@@ -393,6 +396,7 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
       organizer: "HealicWire Academic Directorate",
       scope: "Nationwide",
       eventType: "Conference",
+      managed: "Not Managed",
       startDate: new Date().toISOString().split("T")[0],
       endDate: new Date().toISOString().split("T")[0],
       venue: "Main Medical Auditorium & Virtual Stream",
@@ -606,7 +610,7 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
       a.headline.startsWith("Scientific Events:") ||
       a.headline.startsWith("Pharma and Drugs:") ||
       a.headline.startsWith("Hospital Intelligence:") ||
-      a.headline.startsWith("Living Guidelines:") ||
+      a.headline.startsWith("Current Guidelines:") ||
       a.headline.startsWith("Any Other:")
     );
 
@@ -2333,6 +2337,20 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
                               <option value="Hybrid">Hybrid (In-Person + Live Stream)</option>
                               <option value="In-Person">In-Person Only</option>
                               <option value="Virtual">Virtual Only</option>
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
+                              Management Status
+                            </label>
+                            <select
+                              value={createEventForm.managed}
+                              onChange={e => setCreateEventForm({ ...createEventForm, managed: e.target.value as any })}
+                              className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white font-medium"
+                            >
+                              <option value="Managed">Managed</option>
+                              <option value="Not Managed">Not Managed</option>
                             </select>
                           </div>
 

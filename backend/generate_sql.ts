@@ -81,7 +81,7 @@ function migrate() {
 
   // 3. Guidelines
   if (db.guidelines && db.guidelines.length > 0) {
-    sql += '-- Living Guidelines\n';
+    sql += '-- Current Guidelines\n';
     for (const g of db.guidelines) {
       const cols = [
         'id', 'condition', 'issuing_organization', 'current_recommendation',
@@ -94,7 +94,7 @@ function migrate() {
         escapeSql(g.lastUpdated), escapeSql(g.reasonForChange),
         escapeSql(g.indiaRelevance), escapeSql(g.references || [])
       ];
-      sql += `INSERT INTO living_guidelines (${cols.join(', ')}) VALUES (${vals.join(', ')}) ON CONFLICT (id) DO NOTHING;\n`;
+      sql += `INSERT INTO current_guidelines (${cols.join(', ')}) VALUES (${vals.join(', ')}) ON CONFLICT (id) DO NOTHING;\n`;
     }
     sql += '\n';
   }

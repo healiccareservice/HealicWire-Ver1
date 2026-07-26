@@ -194,7 +194,7 @@ export default function ClinicalInsightsPage({ onSelectArticle }: ClinicalInsigh
           Clinical Insights
         </h1>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400 max-w-2xl leading-relaxed">
-          Curated articles by experts associated with HealicWire, translating medical evidence into practical, evidence-based clinical insights
+          Curated articles by experts associated with HealicWire
         </p>
       </div>
 

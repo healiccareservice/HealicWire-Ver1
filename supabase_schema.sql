@@ -55,7 +55,7 @@ CREATE TABLE articles (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE living_guidelines (
+CREATE TABLE current_guidelines (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     condition TEXT NOT NULL,
     issuing_organization TEXT NOT NULL,
@@ -188,8 +188,8 @@ CREATE TABLE live_qna_items (
 ALTER TABLE articles ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Allow public read access on published articles" ON articles FOR SELECT USING (status = 'published');
 
-ALTER TABLE living_guidelines ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow public read access on living guidelines" ON living_guidelines FOR SELECT USING (true);
+ALTER TABLE current_guidelines ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow public read access on current guidelines" ON current_guidelines FOR SELECT USING (true);
 
 ALTER TABLE hospital_alerts ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Allow public read access on hospital alerts" ON hospital_alerts FOR SELECT USING (true);

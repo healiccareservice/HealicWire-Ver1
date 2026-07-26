@@ -20,6 +20,11 @@ import EditorialsPage from "./components/EditorialsPage";
 import ClinicalInsightsPage from "./components/ClinicalInsightsPage";
 import WhatWeDoSlider from "./components/WhatWeDoSlider";
 import Login from "./components/Login";
+import EditorialCMS from "./components/EditorialCMS";
+import ClinicalInsightsCMS from "./components/ClinicalInsightsCMS";
+import ProvidersPage from "./components/ProvidersPage";
+import BannerMarquee from "./components/BannerMarquee";
+import RepositoryPage from "./components/RepositoryPage";
 import { supabase, mapArticleFromDB, mapAlertFromDB } from "./lib/supabase";
 import { Article, HospitalAlert, ImpactSeverity } from "./types";
 
@@ -46,6 +51,12 @@ export default function App() {
   const [showAdmin, setShowAdmin] = useState(() => {
     return window.location.pathname.startsWith("/contrl-panl") || window.location.pathname.startsWith("/admin");
   });
+  const [showEditorialAccess, setShowEditorialAccess] = useState(() => {
+    return window.location.pathname.startsWith("/editorialsaccess");
+  });
+  const [showClinicalInsightsAccess, setShowClinicalInsightsAccess] = useState(() => {
+    return window.location.pathname.startsWith("/clinicalinsightsaccess");
+  });
   const [session, setSession] = useState<any>(null);
 
   useEffect(() => {
@@ -71,6 +82,18 @@ export default function App() {
       } else {
         setShowAdmin(false);
       }
+      
+      if (path.startsWith("/editorialsaccess")) {
+        setShowEditorialAccess(true);
+      } else {
+        setShowEditorialAccess(false);
+      }
+
+      if (path.startsWith("/clinicalinsightsaccess")) {
+        setShowClinicalInsightsAccess(true);
+      } else {
+        setShowClinicalInsightsAccess(false);
+      }
     };
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
@@ -89,6 +112,21 @@ export default function App() {
     fetchArticles();
   };
 
+  const closeEditorialAccess = () => {
+    window.history.pushState({}, "", "/");
+    setCurrentPath("/");
+    setShowEditorialAccess(false);
+    fetchArticles();
+  };
+
+  const closeClinicalInsightsAccess = () => {
+    window.history.pushState({}, "", "/");
+    setCurrentPath("/");
+    setShowClinicalInsightsAccess(false);
+    fetchArticles();
+  };
+
+  
   let currentTab = "news";
   let eventPageSlug: string | null = null;
   let portalPageSlug: string | null = null;
@@ -134,6 +172,10 @@ export default function App() {
     if (sub) { portalPageSection = "pages"; portalPageSlug = sub; }
   } else if (currentPath.startsWith("/proposal")) {
     currentTab = "proposal";
+  } else if (currentPath.startsWith("/providers")) {
+    currentTab = "providers";
+  } else if (currentPath.startsWith("/repository")) {
+    currentTab = "repository";
   }
 
   const setCurrentTab = (tab: string) => {
@@ -146,6 +188,8 @@ export default function App() {
     else if (tab === "pharma-drugs") newPath = "/pharmadrugs";
     else if (tab === "alerts") newPath = "/alerts";
     else if (tab === "proposal") newPath = "/proposal";
+    else if (tab === "providers") newPath = "/providers";
+    else if (tab === "repository") newPath = "/repository";
     
     window.history.pushState({}, "", newPath);
     setCurrentPath(newPath);
@@ -173,6 +217,7 @@ export default function App() {
     }
   };
   const [latestEditorial, setLatestEditorial] = useState<Article | null>(null);
+  const [latestEditorialProfile, setLatestEditorialProfile] = useState<any | null>(null);
   const [clinicalInsights, setClinicalInsights] = useState<Article[]>([]);
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
 
@@ -282,7 +327,27 @@ export default function App() {
       }
 
       if (finalData) {
-        setLatestEditorial(mapArticleFromDB(finalData));
+        const mappedEditorial = mapArticleFromDB(finalData);
+        setLatestEditorial(mappedEditorial);
+        
+        if (mappedEditorial.sourceName) {
+          // Fetch the profile corresponding to this editorial's author via API to bypass RLS
+          try {
+            const profilesRes = await fetch('/api/profiles');
+            if (profilesRes.ok) {
+              const profilesData = await profilesRes.json();
+              const profData = profilesData.find((p: any) => 
+                p.name === mappedEditorial.sourceName || p.email === mappedEditorial.sourceName
+              );
+              setLatestEditorialProfile(profData || null);
+            } else {
+              setLatestEditorialProfile(null);
+            }
+          } catch (e) {
+            console.error("Failed to fetch profile for latest editorial", e);
+            setLatestEditorialProfile(null);
+          }
+        }
       }
     } catch (err) {
       console.error("Failed to fetch latest editorial:", err);
@@ -507,6 +572,9 @@ export default function App() {
         </div>
       )}
 
+      {/* BANNER MARQUEE (Global Display) */}
+      <BannerMarquee />
+
       {/* MAIN CONTENT PORT */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         {selectedArticle ? (
@@ -559,6 +627,12 @@ export default function App() {
         ) : currentTab === "proposal" ? (
           /* Render Strategic Blueprint Proposal */
           <ProposalPortal />
+        ) : currentTab === "providers" ? (
+          /* Render Providers Page */
+          <ProvidersPage onSelectArticle={setSelectedArticle} />
+        ) : currentTab === "repository" ? (
+          /* Render Repository Page */
+          <RepositoryPage />
         ) : (
           /* Render Interactive News Feed (Comfortable/Compact layouts) */
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -810,8 +884,8 @@ export default function App() {
                     <div>
                       <div className="flex items-center gap-3 mb-3">
                         <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wider font-mono shrink-0">Editorial</h3>
-                        <p className="text-[9px] font-bold text-zinc-500 dark:text-zinc-400 leading-tight border-l-2 border-teal-500/30 pl-2.5">
-                          Editorial presents thought-provoking perspectives from the HealicWire Editorial Board on emerging healthcare trends, clinical practice, medical education, research, and health policy
+                        <p className="text-[11px] font-bold text-zinc-500 dark:text-zinc-400 leading-tight border-l-2 border-teal-500/30 pl-2.5">
+                          Editorial presents thought-provoking perspectives from the HealicWire Editorial Board
                         </p>
                       </div>
                       <div className="bg-zinc-50 dark:bg-zinc-900/20 p-6 rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800 flex flex-col items-center justify-center text-center space-y-2 h-32">
@@ -826,8 +900,8 @@ export default function App() {
                   <div>
                     <div className="flex items-center gap-3 mb-3">
                       <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wider font-mono shrink-0">Editorial</h3>
-                      <p className="text-[9px] font-bold text-zinc-500 dark:text-zinc-400 leading-tight border-l-2 border-teal-500/30 pl-2.5">
-                        Editorial presents thought-provoking perspectives from the HealicWire Editorial Board on emerging healthcare trends, clinical practice, medical education, research, and health policy
+                      <p className="text-[11px] font-bold text-zinc-500 dark:text-zinc-400 leading-tight border-l-2 border-teal-500/30 pl-2.5">
+                        Editorial presents thought-provoking perspectives from the HealicWire Editorial Board
                       </p>
                     </div>
                     <div 
@@ -836,21 +910,37 @@ export default function App() {
                     >
                       {/* Author Profile Banner - Integrated inside the box */}
                       <div className="p-4 rounded-xl bg-gradient-to-r from-teal-900/10 via-emerald-900/10 to-cyan-900/10 dark:from-teal-950/50 dark:via-emerald-950/50 dark:to-cyan-950/50 border border-teal-200/50 dark:border-teal-800/50 shadow-xs flex flex-col items-center text-center sm:flex-row sm:text-left sm:items-center gap-3 transition-colors">
-                        <img
-                          src="https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&w=400&q=80"
-                          alt="Dr. K. Narayana"
-                          className="w-14 h-14 rounded-full object-cover border-2 border-teal-600 shadow-sm shrink-0"
-                        />
+                        {latestEditorialProfile?.avatar_url ? (
+                          <img
+                            src={latestEditorialProfile.avatar_url}
+                            alt={latestEditorialProfile.name || latestEditorial.sourceName}
+                            className="w-14 h-14 rounded-full object-cover border-2 border-teal-600 shadow-sm shrink-0 bg-white"
+                          />
+                        ) : (!latestEditorialProfile && (!latestEditorial.sourceName || latestEditorial.sourceName === "Dr. K. Narayana K")) ? (
+                          <img
+                            src="/images/dr_narayana.jpg"
+                            alt="Dr. K. Narayana K"
+                            className="w-14 h-14 rounded-full object-cover border-2 border-teal-600 shadow-sm shrink-0"
+                          />
+                        ) : (
+                          <div className="w-14 h-14 rounded-full border-2 border-teal-600 shadow-sm shrink-0 bg-teal-100 dark:bg-teal-900 flex items-center justify-center text-teal-600 dark:text-teal-400 font-bold text-xl">
+                            {(latestEditorialProfile?.name || latestEditorial.sourceName || "H").charAt(0)}
+                          </div>
+                        )}
                         <div className="space-y-0.5 flex-1">
                           <h2 className="text-sm font-extrabold text-zinc-900 dark:text-white">
-                            Dr. K. Narayana
+                            {latestEditorialProfile?.name || latestEditorial.sourceName || "Dr. K. Narayana K"}
                           </h2>
-                          <p className="text-[9px] font-mono text-zinc-600 dark:text-zinc-400 font-semibold tracking-wide">
-                            MBBS, MD, DM
-                          </p>
-                          <p className="text-[10px] font-sans text-teal-700 dark:text-teal-400 font-bold">
-                            Editor-in-Chief & Lead Strategist
-                          </p>
+                          {(latestEditorialProfile?.degree || (!latestEditorialProfile && (!latestEditorial.sourceName || latestEditorial.sourceName === "Dr. K. Narayana K"))) && (
+                            <p className="text-[9px] font-mono text-zinc-600 dark:text-zinc-400 font-semibold tracking-wide">
+                              {latestEditorialProfile?.degree || "MBBS, MD, DipIBLM, FHPE"}
+                            </p>
+                          )}
+                          {(latestEditorialProfile?.role || (!latestEditorialProfile && (!latestEditorial.sourceName || latestEditorial.sourceName === "Dr. K. Narayana K"))) && (
+                            <p className="text-[10px] font-sans text-teal-700 dark:text-teal-400 font-bold">
+                              {latestEditorialProfile?.role || "Editor-in-Chief & Lead Strategist"}
+                            </p>
+                          )}
                         </div>
                       </div>
 
@@ -872,7 +962,7 @@ export default function App() {
                         {/* Footer Action Strip */}
                         <div className="px-4 py-2.5 bg-white dark:bg-zinc-950 border-t border-zinc-100 dark:border-zinc-900 flex flex-wrap items-center justify-between text-[11px]">
                           <div className="flex items-center space-x-1 font-mono font-bold text-teal-600 dark:text-teal-400 group-hover:underline">
-                            <span>Read Clinical Analysis</span>
+                            <span>Read Editorial</span>
                             <ChevronRight className="w-3 h-3" />
                           </div>
                         </div>
@@ -889,8 +979,8 @@ export default function App() {
                     <div>
                       <div className="flex items-center gap-3 mb-3">
                         <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wider font-mono shrink-0">Clinical Insights</h3>
-                        <p className="text-[9px] font-bold text-zinc-500 dark:text-zinc-400 leading-tight border-l-2 border-teal-500/30 pl-2.5">
-                          Curated articles by experts associated with HealicWire, translating medical evidence into practical, evidence-based clinical insights
+                        <p className="text-[11px] font-bold text-zinc-500 dark:text-zinc-400 leading-tight border-l-2 border-teal-500/30 pl-2.5">
+                          Curated articles by experts associated with HealicWire
                         </p>
                       </div>
                       <div className="bg-zinc-50 dark:bg-zinc-900/20 p-6 rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800 flex flex-col items-center justify-center text-center space-y-2 h-32">
@@ -906,8 +996,8 @@ export default function App() {
                     <div className="flex items-center justify-between gap-3 mb-3">
                       <div className="flex items-center gap-3">
                         <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wider font-mono shrink-0">Clinical Insights</h3>
-                        <p className="hidden sm:block text-[9px] font-bold text-zinc-500 dark:text-zinc-400 leading-tight border-l-2 border-teal-500/30 pl-2.5">
-                          Curated articles by experts associated with HealicWire, translating medical evidence into practical, evidence-based clinical insights
+                        <p className="hidden sm:block text-[11px] font-bold text-zinc-500 dark:text-zinc-400 leading-tight border-l-2 border-teal-500/30 pl-2.5">
+                          Curated articles by experts associated with HealicWire
                         </p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
@@ -1160,7 +1250,49 @@ export default function App() {
           {!session ? (
             <Login onLogin={() => {}} />
           ) : (
-            <AdminCMS onClose={closeAdmin} />
+            <AdminCMS onClose={closeAdmin} session={session} />
+          )}
+        </div>
+      )}
+
+      {/* EDITORIAL ACCESS INTERFACE DIALOG OVERLAY */}
+      {showEditorialAccess && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm overflow-y-auto flex items-center justify-center">
+          {!session ? (
+            <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-50 dark:bg-zinc-950 p-4">
+              <div className="mb-8 text-center">
+                <h1 className="text-2xl font-bold font-mono tracking-tight text-zinc-900 dark:text-white uppercase">
+                  Editorial <span className="text-teal-600">Access</span>
+                </h1>
+                <p className="text-zinc-500 text-sm font-mono mt-2">Login to manage your publications</p>
+              </div>
+              <div className="w-full max-w-md shadow-2xl rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800">
+                <Login onLogin={() => {}} />
+              </div>
+            </div>
+          ) : (
+            <EditorialCMS onClose={closeEditorialAccess} session={session} />
+          )}
+        </div>
+      )}
+
+      {/* CLINICAL INSIGHTS ACCESS INTERFACE DIALOG OVERLAY */}
+      {showClinicalInsightsAccess && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm overflow-y-auto flex items-center justify-center">
+          {!session ? (
+            <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-50 dark:bg-zinc-950 p-4">
+              <div className="mb-8 text-center">
+                <h1 className="text-2xl font-bold font-mono tracking-tight text-zinc-900 dark:text-white uppercase">
+                  Clinical Insights <span className="text-teal-600">Access</span>
+                </h1>
+                <p className="text-zinc-500 text-sm font-mono mt-2">Login to manage your clinical insights</p>
+              </div>
+              <div className="w-full max-w-md shadow-2xl rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800">
+                <Login onLogin={() => {}} />
+              </div>
+            </div>
+          ) : (
+            <ClinicalInsightsCMS onClose={closeClinicalInsightsAccess} session={session} />
           )}
         </div>
       )}
@@ -1214,7 +1346,7 @@ export default function App() {
                   <h3 className="font-bold uppercase font-mono">Medical Disclaimer</h3>
                 </div>
                 <p className="text-xs text-zinc-600 dark:text-zinc-450 leading-relaxed font-sans">
-                  All content published on HealicWire (including articles, clinical analyses, living guidelines, AI clinical assistant replies, and interactive exam quizzes) is provided for informational, educational, and institutional warning purposes only.
+                  All content published on HealicWire (including articles, clinical analyses, current guidelines, AI clinical assistant replies, and interactive exam quizzes) is provided for informational, educational, and institutional warning purposes only.
                   <br /><br />
                   This content does NOT constitute medical advice, personalized diagnosis, or active treatment prescriptions. It should not be used as a substitute for professional medical consultation or expert clinical judgement.
                 </p>

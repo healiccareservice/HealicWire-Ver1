@@ -4,7 +4,7 @@
  */
 
 import { useState } from "react";
-import { Activity, ShieldAlert, BookOpen, Search, Sun, Moon, Database, Calendar, Stethoscope, Menu, X, UserCheck, Layers, Lightbulb } from "lucide-react";
+import { Activity, ShieldAlert, BookOpen, Search, Sun, Moon, Database, Calendar, Stethoscope, Menu, X, UserCheck, Layers, Lightbulb, Landmark } from "lucide-react";
 import HealicLogo from "./HealicLogo";
 
 interface HeaderProps {
@@ -33,13 +33,11 @@ export default function Header({
 
   const tabs = [
     { id: "news", label: "Latest News", icon: Activity },
-    { id: "editorials", label: "Editorials", icon: UserCheck },
-    { id: "clinical-insights", label: "Clinical Insights", icon: Lightbulb },
     { id: "guidelines", label: "Current Guidelines", icon: BookOpen },
     { id: "pharma-drugs", label: "Pharma and Drugs", icon: Layers },
-    { id: "alerts", label: "", icon: ShieldAlert },
     { id: "treatment-updates", label: "Treatment Update", icon: Stethoscope },
-    { id: "events", label: "Scientific Events", icon: Calendar }
+    { id: "events", label: "Scientific Events", icon: Calendar },
+    { id: "providers", label: "Health Care Providers", icon: Landmark }
   ];
 
   const categories = [
@@ -136,15 +134,6 @@ export default function Header({
               {theme === "light" ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
             </button>
 
-            {/* Admin CMS Access (contrl-panl) */}
-            <button
-              onClick={onOpenAdmin}
-              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-full border border-teal-600/40 dark:border-teal-400/40 text-xs font-mono font-bold text-teal-700 dark:text-teal-300 bg-teal-50/60 dark:bg-teal-950/40 hover:bg-teal-100/80 transition-all shadow-2xs"
-              title="Control Panel (contrl-panl)"
-            >
-              <Database className="w-3.5 h-3.5 text-teal-600" />
-              <span>contrl-panl</span>
-            </button>
 
             {/* Mobile Menu Button */}
             <button
@@ -215,17 +204,7 @@ export default function Header({
             );
           })}
 
-          {/* Dedicated contrl-panl Mobile Button */}
-          <button
-            onClick={() => {
-              onOpenAdmin();
-              setMobileMenuOpen(false);
-            }}
-            className="w-full flex items-center space-x-2.5 px-3 py-2.5 rounded-lg text-xs font-mono font-bold text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-950/40 hover:bg-teal-100 border border-teal-200 dark:border-teal-800"
-          >
-            <Database className="w-4 h-4 text-teal-600" />
-            <span>contrl-panl</span>
-          </button>
+
         </div>
       )}
 

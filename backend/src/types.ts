@@ -140,6 +140,26 @@ export interface Article {
   factCheckClaims?: FactCheckClaim[];
   clinicalImpactScore?: number;
   views: number;
+  seoDescription?: string;
+  keywords?: string[];
+  providerId?: string;
+}
+
+export interface Provider {
+  id: string;
+  name: string;
+  providerType: string;
+  region?: string;
+  location?: string;
+  establishedYear?: number;
+  websiteUrl?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  bedCapacity?: number;
+  accreditations?: string[];
+  servicesOffered?: string[];
+  description?: string;
+  logoUrl?: string;
 }
 
 export interface LivingGuideline {

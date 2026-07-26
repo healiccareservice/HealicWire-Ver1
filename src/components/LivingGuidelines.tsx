@@ -21,7 +21,7 @@ export default function LivingGuidelines({ title = "Current Guidelines Registry"
   const [treatmentUpdates, setTreatmentUpdates] = useState<any[]>([]);
 
   useEffect(() => {
-    fetch("/api/living-guidelines")
+    fetch("/api/current-guidelines")
       .then(res => res.json())
       .then(data => {
         setGuidelines(data);

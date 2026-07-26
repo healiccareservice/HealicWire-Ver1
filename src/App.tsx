@@ -920,7 +920,7 @@ export default function App() {
                   <h3 className="font-bold uppercase font-mono">Medical Disclaimer</h3>
                 </div>
                 <p className="text-xs text-zinc-600 dark:text-zinc-450 leading-relaxed font-sans">
-                  All content published on HealicWire (including articles, clinical analyses, living guidelines, AI clinical assistant replies, and interactive exam quizzes) is provided for informational, educational, and institutional warning purposes only.
+                  All content published on HealicWire (including articles, clinical analyses, current guidelines, AI clinical assistant replies, and interactive exam quizzes) is provided for informational, educational, and institutional warning purposes only.
                   <br /><br />
                   This content does NOT constitute medical advice, personalized diagnosis, or active treatment prescriptions. It should not be used as a substitute for professional medical consultation or expert clinical judgement.
                 </p>

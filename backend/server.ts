@@ -170,7 +170,8 @@ async function startServer() {
     credentials: true
   }));
 
-  app.use(express.json());
+  app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
   // Initialize DB
   const db = loadDb();
@@ -201,7 +202,71 @@ async function startServer() {
   // Protect all admin routes
   app.use("/api/admin", requireAuth);
 
+  // Profile management endpoint (bypasses RLS issues for inserts)
+  app.post("/api/admin/profile", async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const { name, degree, role, work_place, bio, avatar_url } = req.body;
+      
+      const { error } = await supabaseAdmin
+        .from("user_profiles")
+        .upsert({
+          id: user.id,
+          email: user.email,
+          name,
+          degree,
+          role,
+          work_place,
+          bio,
+          avatar_url,
+          updated_at: new Date().toISOString()
+        });
+
+      if (error) {
+        throw error;
+      }
+
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Error saving profile:", error);
+      res.status(500).json({ error: error.message || "Failed to save profile" });
+    }
+  });
+
+  // Get current user profile
+  app.get("/api/admin/profile", async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const { data, error } = await supabaseAdmin
+        .from("user_profiles")
+        .select("*")
+        .eq("id", user.id)
+        .maybeSingle();
+      
+      if (error && error.code !== 'PGRST116') {
+        throw error;
+      }
+      
+      res.json({ profile: data });
+    } catch (error: any) {
+      console.error("Error fetching profile:", error);
+      res.status(500).json({ error: error.message || "Failed to fetch profile" });
+    }
+  });
+
   // --- API ROUTES ---
+
+  // Get all profiles (bypasses RLS so frontend can display author profiles)
+  app.get("/api/profiles", async (req, res) => {
+    try {
+      const { data, error } = await supabaseAdmin.from("user_profiles").select("*");
+      if (error) throw error;
+      res.json(data);
+    } catch (error: any) {
+      console.error("Error fetching profiles:", error);
+      res.status(500).json({ error: error.message || "Failed to fetch profiles" });
+    }
+  });
 
   // Health check
   app.get("/api/health", (req, res) => {
@@ -223,7 +288,7 @@ async function startServer() {
     publishedAt: row.published_at,
     sourcePublishedAt: row.source_published_at,
     readingTimeMinutes: row.reading_time_minutes,
-    sourceName: row.source_name,
+    sourceName: row.source_name || row.author_name,
     sourceUrl: row.source_url,
     evidenceLevel: row.evidence_level,
     isAiAssisted: row.is_ai_assisted,
@@ -440,7 +505,24 @@ async function startServer() {
   
   app.get("/api/admin/editorials", async (req, res) => {
     try {
-      const { data, error } = await supabaseAdmin.from('editorials').select('*').order('created_at', { ascending: false });
+      const user = (req as any).user;
+      
+      // Fetch user profile
+      const { data: profile } = await supabaseAdmin.from('user_profiles').select('*').eq('id', user.id).maybeSingle();
+      
+      let query = supabaseAdmin.from('editorials').select('*').order('created_at', { ascending: false });
+      
+      // If not an admin, only show their own articles
+      if (!profile?.permissions?.includes('admin')) {
+         const authorNames = [];
+         if (profile?.name) authorNames.push(profile.name);
+         if (user.email) authorNames.push(user.email);
+         if (authorNames.length > 0) {
+           query = query.in('author_name', authorNames);
+         }
+      }
+      
+      const { data, error } = await query;
       if (error) throw error;
       res.json((data || []).map(mapArticleFromDb));
     } catch (err: any) {
@@ -593,8 +675,182 @@ async function startServer() {
     }
   });
 
-  // Get living guidelines
-  app.get("/api/living-guidelines", (req, res) => {
+  // ==========================================
+  // CLINICAL INSIGHTS (Admin/CMS)
+  // ==========================================
+
+  app.get("/api/admin/clinical_insights", async (req, res) => {
+    try {
+      const user = (req as any).user;
+      
+      const { data: profile } = await supabaseAdmin.from('user_profiles').select('*').eq('id', user.id).maybeSingle();
+      
+      let query = supabaseAdmin.from('clinical_insights').select('*').order('created_at', { ascending: false });
+      
+      if (!profile?.permissions?.includes('admin') && !profile?.permissions?.includes('super_admin')) {
+         const authorNames = [];
+         if (profile?.name) authorNames.push(profile.name);
+         if (user.email) authorNames.push(user.email);
+         if (authorNames.length > 0) {
+           query = query.in('author_name', authorNames);
+         }
+      }
+      
+      const { data, error } = await query;
+      if (error) throw error;
+      res.json(data || []);
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/admin/clinical_insights", async (req, res) => {
+    try {
+      const slug = req.body.headline.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") + '-' + Math.floor(Math.random() * 1000);
+      const payload = {
+        id: "ci-" + Date.now(),
+        slug: slug,
+        headline: req.body.headline,
+        subhead: req.body.subhead || "",
+        category: req.body.category || "Clinical Insights",
+        specialties: req.body.specialties || [],
+        region: req.body.region || "Global",
+        image_url: req.body.imageUrl || "",
+        image_credit: req.body.imageCredit || "",
+        published_at: req.body.status === "published" ? new Date().toISOString() : null,
+        status: req.body.status || "draft",
+        author_name: req.body.sourceName || "Clinical Consultant",
+        reading_time_minutes: req.body.readingTimeMinutes || 6,
+        summary_30s: req.body.summary30s || "",
+        body_analysis: req.body.bodyAnalysis || "",
+        clinical_impact_score: req.body.clinicalImpactScore || 8
+      };
+
+      const { data, error } = await supabaseAdmin.from('clinical_insights').insert(payload).select();
+      if (error) throw error;
+      res.json(data[0]);
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/admin/clinical_insights/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const payload: any = {
+        headline: req.body.headline,
+        subhead: req.body.subhead,
+        category: req.body.category,
+        specialties: req.body.specialties,
+        region: req.body.region,
+        image_url: req.body.imageUrl,
+        image_credit: req.body.imageCredit,
+        status: req.body.status,
+        author_name: req.body.sourceName,
+        reading_time_minutes: req.body.readingTimeMinutes,
+        summary_30s: req.body.summary30s,
+        body_analysis: req.body.bodyAnalysis,
+        clinical_impact_score: req.body.clinicalImpactScore,
+        updated_at: new Date().toISOString()
+      };
+      
+      if (req.body.status === "published") {
+        payload.published_at = new Date().toISOString();
+      }
+
+      const { data, error } = await supabaseAdmin.from('clinical_insights').update(payload).eq('id', id).select();
+      if (error) throw error;
+      res.json(data[0]);
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/admin/clinical_insights/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { error } = await supabaseAdmin.from('clinical_insights').delete().eq('id', id);
+      if (error) throw error;
+      res.json({ success: true });
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/admin/clinical_insights/generate", async (req, res) => {
+    try {
+      const { topic, criteria, category, region } = req.body;
+      if (!topic) return res.status(400).json({ error: "Topic is required" });
+
+      const prompt = `
+        You are an expert Clinical Consultant writing for HealicWire.
+        Write a highly detailed clinical insight (approximately 1000 words) on the following topic: "${topic}".
+        ${criteria ? `\n        Follow these specific criteria and guidelines:\n        ${criteria}\n` : ''}
+        The insight should be evidence-based, practical, and highly relevant to clinicians.
+        
+        Return a JSON object with the following fields:
+        {
+          "headline": "A compelling, professional headline",
+          "subhead": "A brief subheadline summarizing the main point",
+          "category": "${category || 'Clinical Insights'}",
+          "specialties": ["Specialty 1", "Specialty 2"],
+          "region": "${region || 'Global'}",
+          "readingTimeMinutes": 5,
+          "summary30s": "A 1-paragraph executive summary (approx 50 words) for quick scanning.",
+          "bodyAnalysis": "The full detailed insight text. Use markdown for formatting, including ## headings for sections, bullet points, and paragraphs.",
+          "clinicalImpactScore": 8,
+          "sourceName": "Clinical Consultant"
+        }
+      `;
+
+      const result = await getGeminiClient().models.generateContent({
+        model: "gemini-3.6-flash",
+        contents: prompt
+      });
+
+      const text = result.text || "{}";
+      const cleanJson = text.replace(/\`\`\`json/g, "").replace(/\`\`\`/g, "").trim();
+      const article = JSON.parse(cleanJson);
+      
+      let finalImageUrl = "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=800&q=80";
+      let finalImageCredit = "Clinical Insight Illustration";
+      try {
+        const wikiTopic = article.category || topic;
+        const wikiRes = await fetch(`https://en.wikipedia.org/w/api.php?action=query&format=json&prop=pageimages&generator=search&gsrsearch=${encodeURIComponent(wikiTopic)}&gsrlimit=20&pithumbsize=800`);
+        const json = await wikiRes.json();
+        const urls: string[] = [];
+        if (json.query && json.query.pages) {
+          for (const key in json.query.pages) {
+            const page = json.query.pages[key];
+            if (page.thumbnail && page.thumbnail.source && !page.thumbnail.source.includes('svg')) {
+              urls.push(page.thumbnail.source);
+            }
+          }
+        }
+        if (urls.length > 0) {
+          finalImageUrl = urls[Math.floor(Math.random() * urls.length)];
+          finalImageCredit = "Wikimedia Commons";
+        }
+      } catch (e) {
+        console.error("Wiki fetch error in clinical insight generation:", e);
+      }
+
+      article.imageUrl = finalImageUrl;
+      article.imageCredit = finalImageCredit;
+
+      res.json({ success: true, article });
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Get current guidelines
+  app.get("/api/current-guidelines", (req, res) => {
     res.json(db.guidelines);
   });
 
@@ -604,7 +860,7 @@ async function startServer() {
   });
 
   // Add scientific event
-  app.post("/api/scientific-events", async (req, res) => {
+  app.post("/api/scientific-events", requireAuth, async (req, res) => {
     try {
       const { 
         title, organizer, scope, eventType, targetProfessions, startDate, endDate, duration, 
@@ -612,7 +868,7 @@ async function startServer() {
         cmeAccreditationBody, description, objectives, abstractDeadline, registrationDeadline, 
         earlyBirdDeadline, earlyBirdCost, cost, seatsAvailable, seatsLeft, imageUrl, posterUrl, 
         keynoteSpeakers, speakerProfiles, schedule, registrationUrl, organizerWebsite, faqs,
-        submissionUrl, certificateUrl, souvenirUrl, webpageImage, slug
+        submissionUrl, certificateUrl, souvenirUrl, webpageImage, slug, managed
       } = req.body;
       
       if (!title || !organizer || !startDate || !venue) {
@@ -620,7 +876,6 @@ async function startServer() {
       }
 
       const payload = {
-        id: "evt-" + Date.now(),
         title,
         organizer,
         scope: scope || "Local",
@@ -663,7 +918,8 @@ async function startServer() {
         faqs: faqs || [],
         views_count: 1,
         registrations_count: 0,
-        rating: 5.0
+        rating: 5.0,
+        managed: managed || "Managed"
       };
 
       const { data, error } = await supabaseAdmin.from('scientific_events').insert([payload]).select();
@@ -694,7 +950,7 @@ async function startServer() {
         schedule: "schedule", registrationUrl: "registration_url", submissionUrl: "submission_url", 
         certificateUrl: "certificate_url", souvenirUrl: "souvenir_url", webpageImage: "webpage_image", 
         slug: "slug", organizerWebsite: "organizer_website", faqs: "faqs", viewsCount: "views_count", 
-        registrationsCount: "registrations_count", rating: "rating", aiSummary: "ai_summary"
+        registrationsCount: "registrations_count", rating: "rating", aiSummary: "ai_summary", managed: "managed"
       };
 
       for (const [camelKey, snakeKey] of Object.entries(fieldsToSnake)) {
@@ -829,7 +1085,7 @@ async function startServer() {
     res.json([]); // Mock implementation if not used
   });
 
-  app.post("/api/generate-bulk-news", async (req, res) => {
+  app.post("/api/generate-bulk-news", requireAuth, async (req, res) => {
     try {
       const { targetDate, count = 1 } = req.body;
       const ai = getGeminiClient();
@@ -1065,7 +1321,8 @@ async function startServer() {
           cme_credits: 12,
           description: newEvtArt.summary_30s,
           cost: "Complimentary / CME Accredited",
-          registration_url: "#"
+          registration_url: "#",
+          managed: "Not Managed"
         };
         await supabaseAdmin.from('scientific_events').insert([newEvt]);
       } else if (section === "Pharma and Drugs") {
@@ -1115,7 +1372,7 @@ async function startServer() {
           india_relevance: "Strong (High-Quality Evidence)",
           "references": []
         };
-        await supabaseAdmin.from('living_guidelines').insert([newGuideline]);
+        await supabaseAdmin.from('current_guidelines').insert([newGuideline]);
       }
     }
 
@@ -1136,7 +1393,7 @@ async function startServer() {
   });
 
   // AI Event Conference Assistant endpoint
-  app.post("/api/scientific-events/:id/ai-assistant", async (req, res) => {
+  app.post("/api/scientific-events/:id/ai-assistant", requireAuth, async (req, res) => {
     const { id } = req.params;
     const { question } = req.body;
     
@@ -1185,7 +1442,7 @@ async function startServer() {
   });
 
   // AI Event Summary & Notes Generator endpoint
-  app.post("/api/scientific-events/:id/ai-summary", async (req, res) => {
+  app.post("/api/scientific-events/:id/ai-summary", requireAuth, async (req, res) => {
     const { id } = req.params;
     
     const { data: events, error } = await supabaseAdmin.from('scientific_events').select('*').eq('id', id);
@@ -1239,7 +1496,7 @@ async function startServer() {
   });
 
   // Add living guideline
-  app.post("/api/admin/living-guidelines", async (req, res) => {
+  app.post("/api/admin/current-guidelines", async (req, res) => {
     try {
       const payload = {
         id: "g-" + Date.now(),
@@ -1253,7 +1510,7 @@ async function startServer() {
         "references": req.body.references || []
       };
       
-      const { data, error } = await supabaseAdmin.from('living_guidelines').insert([payload]).select();
+      const { data, error } = await supabaseAdmin.from('current_guidelines').insert([payload]).select();
       if (error) throw error;
       res.status(201).json(data[0]);
     } catch (err: any) {
@@ -1503,8 +1760,8 @@ async function startServer() {
     }
   });
 
-  // 2. Article-specific AI Assistant Q&A
-  app.post("/api/articles/:id/assistant", async (req, res) => {
+  // 2. Article-specific AI Assistant endpoint
+  app.post("/api/articles/:id/assistant", requireAuth, async (req, res) => {
     const { id } = req.params;
     const { question, history } = req.body;
 
@@ -1580,7 +1837,7 @@ async function startServer() {
   });
 
   // 3. AI Claim Fact-Checker & Verifier
-  app.post("/api/articles/:id/verify", async (req, res) => {
+  app.post("/api/articles/:id/verify", requireAuth, async (req, res) => {
     const { id } = req.params;
     const { data: articles, error } = await supabaseAdmin.from('articles').select('*').eq('id', id);
     if (error || !articles || articles.length === 0) {
@@ -1640,7 +1897,7 @@ async function startServer() {
   });
 
   // 4. News-To-Learning Dynamic Quiz Generator
-  app.post("/api/articles/:id/quiz", async (req, res) => {
+  app.post("/api/articles/:id/quiz", requireAuth, async (req, res) => {
     const { id } = req.params;
     const { data: articles, error } = await supabaseAdmin.from('articles').select('*').eq('id', id);
     if (error || !articles || articles.length === 0) {

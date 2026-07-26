@@ -8,7 +8,8 @@ import {
   Search, Calendar, MapPin, Laptop, Sparkles, Plus, Clock, 
   Award, CheckCircle, ExternalLink, User, DollarSign, X, AlertCircle, RefreshCw, FileText,
   Filter, Share2, Bookmark, BookmarkCheck, ChevronRight, MessageSquare, BookOpen, Layers,
-  Send, ThumbsUp, Star, ShieldCheck, Download, Trash2, Check, ArrowRight, Compass, Users
+  Send, ThumbsUp, Star, ShieldCheck, Download, Trash2, Check, ArrowRight, Compass, Users,
+  GraduationCap, Video, Globe2, Briefcase, ChevronDown, ShieldAlert, Zap, AlertTriangle, Lock
 } from "lucide-react";
 import { ScientificEvent, EventRegistration, LiveQnAItem, AiSummaryData } from "../types";
 import { supabase, mapEventFromDB, mapArticleFromDB } from "../lib/supabase";
@@ -91,7 +92,11 @@ export default function ScientificEvents() {
         .from('scientific_events')
         .select('*');
       if (error) throw error;
-      if (data) setEvents(data.map(mapEventFromDB));
+      if (data) {
+        const mapped = data.map(mapEventFromDB);
+        setEvents(mapped.filter((e: any) => e.managed === 'Not Managed' || !e.managed));
+        setPortalEvents(mapped.filter((e: any) => e.managed === 'Managed'));
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -101,24 +106,6 @@ export default function ScientificEvents() {
 
   useEffect(() => {
     fetchEvents();
-    // Fetch portal events
-    const fetchPortalEvents = async () => {
-      try {
-        const { data, error } = await supabase.from('articles').select('*');
-        if (error) throw error;
-        if (data) {
-          const generated = data.filter((a: any) =>
-            (a.source_name === "HealicWire Special Page Engine" || a.headline?.startsWith("Scientific Events:")) &&
-            !a.headline?.startsWith("Treatment Update:") &&
-            a.category !== "Pharma and Drugs"
-          );
-          setPortalEvents(generated.map(mapArticleFromDB));
-        }
-      } catch (err) {
-        console.error(err);
-      }
-    };
-    fetchPortalEvents();
   }, []);
 
   // Sync LocalStorage
@@ -237,9 +224,13 @@ export default function ScientificEvents() {
     setAiChatLoading(true);
 
     try {
+      const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch(`/api/scientific-events/${aiAssistantEvent.id}/ai-assistant`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": session ? `Bearer ${session.access_token}` : ""
+        },
         body: JSON.stringify({ question: q })
       });
       const data = await res.json();
@@ -259,7 +250,13 @@ export default function ScientificEvents() {
 
     setAiSummaryLoading(true);
     try {
-      const res = await fetch(`/api/scientific-events/${event.id}/ai-summary`, { method: "POST" });
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`/api/scientific-events/${event.id}/ai-summary`, { 
+        method: "POST",
+        headers: {
+          "Authorization": session ? `Bearer ${session.access_token}` : ""
+        }
+      });
       const data = await res.json();
       setAiSummaryData(data);
       setEvents(prev => prev.map(e => e.id === event.id ? { ...e, aiSummary: data } : e));
@@ -555,7 +552,7 @@ export default function ScientificEvents() {
               <Sparkles className="w-5 h-5 text-purple-600 dark:text-purple-400 animate-pulse shrink-0" />
               <div>
                 <h2 className="text-base font-extrabold text-zinc-900 dark:text-white uppercase font-mono tracking-tight">
-                  Featured Portal Events & Symposia
+                  Managed Events & Symposia
                 </h2>
                 <p className="text-xs text-zinc-500 dark:text-zinc-400">
                   Published scientific events & portal pages generated via HealicWire Control Panel.
@@ -577,49 +574,31 @@ export default function ScientificEvents() {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="px-2.5 py-0.5 rounded text-[9.5px] font-mono font-bold bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 uppercase">
-                      {pEvt.category || "Scientific Event"}
+                      {pEvt.eventType || "Scientific Event"}
                     </span>
                     <span className="text-[10.5px] font-mono text-zinc-400">
-                      {new Date(pEvt.publishedAt || Date.now()).toLocaleDateString("en-IN")}
+                      {new Date(pEvt.startDate || Date.now()).toLocaleDateString("en-IN")}
                     </span>
                   </div>
 
                   <h3 className="text-sm font-bold text-zinc-900 dark:text-white leading-snug">
-                    {pEvt.headline}
+                    {pEvt.title}
                   </h3>
 
                   <p className="text-xs text-zinc-600 dark:text-zinc-400 line-clamp-2 leading-relaxed">
-                    {pEvt.summary30s || pEvt.bodyAnalysis}
+                    {pEvt.description}
                   </p>
                 </div>
 
                 <div className="mt-4 pt-3 border-t border-zinc-100 dark:border-zinc-900 flex items-center justify-between text-xs">
                   <div className="flex items-center space-x-1.5 text-[11px] text-zinc-500 font-mono">
                     <Award className="w-3.5 h-3.5 text-amber-500" />
-                    <span>12 CME Credits</span>
+                    <span>{pEvt.cmeCredits || 12} CME Credits</span>
                   </div>
 
                   <button
                     onClick={() => {
-                      setSelectedEvent({
-                        id: pEvt.id,
-                        title: pEvt.headline,
-                        organizer: pEvt.sourceName || "HealicWire Special Page Engine",
-                        scope: "Nationwide",
-                        eventType: "Conference",
-                        startDate: pEvt.publishedAt?.split("T")[0] || "2026-07-25",
-                        endDate: "2026-07-27",
-                        venue: "Main Medical Auditorium & Online Hybrid Stream",
-                        city: "New Delhi",
-                        country: "India",
-                        format: "Hybrid",
-                        specialties: pEvt.specialties || ["Cardiology", "Internal Medicine"],
-                        cmeCredits: 12,
-                        description: pEvt.summary30s || pEvt.bodyAnalysis,
-                        cost: "Complimentary / CME Accredited",
-                        registrationUrl: "#",
-                        imageUrl: pEvt.imageUrl
-                      });
+                      setSelectedEvent(pEvt);
                     }}
                     className="px-3.5 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-2xs transition-all flex items-center space-x-1"
                   >

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import HealicLogo from './HealicLogo';
-import { ShieldAlert, Mail, Lock, Loader2, Eye, EyeOff } from 'lucide-react';
+import { ShieldAlert, Mail, Lock, Loader2, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
 
 export default function Login({ onLogin }: { onLogin: () => void }) {
   const [email, setEmail] = useState('');
@@ -9,6 +9,28 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resetMessage, setResetMessage] = useState<string | null>(null);
+
+  const handleForgotPassword = async () => {
+    if (!email) {
+      setError('Please enter your email address first to reset password.');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    setResetMessage(null);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin,
+      });
+      if (error) throw error;
+      setResetMessage('Password reset email sent! Check your inbox.');
+    } catch (err: any) {
+      setError(err.message || 'Failed to send reset email');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,6 +86,18 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
             </div>
           )}
 
+          {resetMessage && (
+            <div className="p-3 bg-teal-500/10 border border-teal-500/20 rounded-lg flex flex-col gap-1">
+              <div className="flex items-center space-x-2 text-teal-600 dark:text-teal-400">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                <span className="text-xs font-bold uppercase tracking-wider font-mono">Success</span>
+              </div>
+              <p className="text-xs text-teal-600/80 dark:text-teal-400/80 pl-6">
+                {resetMessage}
+              </p>
+            </div>
+          )}
+
           <div className="space-y-4">
             <div>
               <label className="block text-xs font-mono font-bold uppercase text-zinc-700 dark:text-zinc-300 mb-2">
@@ -114,6 +148,16 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
                   </button>
                 </div>
               </div>
+            </div>
+            
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={handleForgotPassword}
+                className="text-[10px] font-mono text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 transition-colors"
+              >
+                Forgot Password?
+              </button>
             </div>
           </div>
 

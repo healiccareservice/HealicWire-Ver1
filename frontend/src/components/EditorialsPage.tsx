@@ -29,26 +29,44 @@ export default function EditorialsPage({ onSelectArticle }: EditorialsPageProps)
     setTimeout(() => setToastMsg(null), 3000);
   };
 
+  const [profiles, setProfiles] = useState<Record<string, any>>({});
+
   useEffect(() => {
     const fetchEditorials = async () => {
       try {
-        const { data, error } = await supabase.from('editorials').select('*').eq('status', 'published').order('created_at', { ascending: false });
+        const edRes = await supabase.from('editorials').select('*').eq('status', 'published').order('created_at', { ascending: false });
         
-        let finalData = data;
-        if (error) {
-          if (error.code === '42P01' || error.message.includes('does not exist')) {
+        let finalData = edRes.data;
+        if (edRes.error) {
+          if (edRes.error.code === '42P01' || edRes.error.message.includes('does not exist')) {
             console.warn("Editorials table missing, falling back to articles table");
             const { data: artData, error: artError } = await supabase.from('articles').select('*').eq('category', 'Editorial').eq('status', 'published').order('created_at', { ascending: false });
             if (artError) throw artError;
             finalData = artData;
           } else {
-            throw error;
+            throw edRes.error;
           }
         }
         
         if (finalData) {
           const mapped = finalData.map((e: any) => ({ ...mapArticleFromDB(e), isEditorial: true }));
           setEditorials(mapped);
+        }
+
+        // Fetch profiles from backend API to bypass RLS issues
+        try {
+          const profilesRes = await fetch('/api/profiles');
+          if (profilesRes.ok) {
+            const profilesData = await profilesRes.json();
+            const profMap: Record<string, any> = {};
+            profilesData.forEach((p: any) => {
+              if (p.name) profMap[p.name] = p;
+              if (p.email) profMap[p.email] = p;
+            });
+            setProfiles(profMap);
+          }
+        } catch (e) {
+          console.error("Failed to fetch profiles via API", e);
         }
       } catch (err) {
         console.error("Error loading editorials:", err);
@@ -139,26 +157,42 @@ export default function EditorialsPage({ onSelectArticle }: EditorialsPageProps)
           {filteredEditorials.map(ed => {
             const isExpanded = expandedIds.includes(ed.id);
             const isSaved = savedIds.includes(ed.id);
+            const authorProfile = profiles[ed.sourceName || ""] || {
+              name: ed.sourceName || "Dr. K. Narayana K",
+              degree: ed.sourceName === "Dr. K. Narayana K" ? "MBBS, MD, DipIBLM, FHPE" : "",
+              role: ed.sourceName === "Dr. K. Narayana K" ? "Editor-in-Chief & Lead Strategist" : "Editorial Board Member",
+              avatar_url: ed.sourceName === "Dr. K. Narayana K" ? "/images/dr_narayana.jpg" : ""
+            };
 
             return (
               <div key={ed.id} className="space-y-3">
                 {/* Author Profile Banner - Placed above every article */}
                 <div className="p-6 rounded-2xl bg-gradient-to-r from-teal-900/10 via-emerald-900/10 to-cyan-900/10 dark:from-teal-950/50 dark:via-emerald-950/50 dark:to-cyan-950/50 border border-teal-200/80 dark:border-teal-800/80 shadow-xs flex flex-col sm:flex-row items-center sm:items-start gap-5">
-                  <img
-                    src="https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&w=400&q=80"
-                    alt="Dr. K. Narayana"
-                    className="w-20 h-20 rounded-full object-cover border-3 border-teal-600 shadow-md shrink-0"
-                  />
+                  {authorProfile.avatar_url ? (
+                    <img
+                      src={authorProfile.avatar_url}
+                      alt={authorProfile.name}
+                      className="w-20 h-20 rounded-full object-cover border-3 border-teal-600 shadow-md shrink-0 bg-white"
+                    />
+                  ) : (
+                    <div className="w-20 h-20 rounded-full border-3 border-teal-600 shadow-md shrink-0 bg-teal-100 dark:bg-teal-900 flex items-center justify-center text-teal-600 dark:text-teal-400 font-bold text-2xl">
+                      {authorProfile.name.charAt(0)}
+                    </div>
+                  )}
                   <div className="space-y-1.5 text-center sm:text-left flex-1">
                     <h2 className="text-lg font-extrabold text-zinc-900 dark:text-white">
-                      Dr. K. Narayana
+                      {authorProfile.name || ed.sourceName}
                     </h2>
-                    <p className="text-xs font-mono text-zinc-600 dark:text-zinc-400 font-semibold tracking-wide">
-                      MBBS, MD, DM
-                    </p>
-                    <p className="text-sm font-sans text-teal-700 dark:text-teal-400 font-bold">
-                      Editor-in-Chief & Lead Strategist
-                    </p>
+                    {authorProfile.degree && (
+                      <p className="text-xs font-mono text-zinc-600 dark:text-zinc-400 font-semibold tracking-wide">
+                        {authorProfile.degree}
+                      </p>
+                    )}
+                    {authorProfile.role && (
+                      <p className="text-sm font-sans text-teal-700 dark:text-teal-400 font-bold">
+                        {authorProfile.role}
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -191,8 +225,7 @@ export default function EditorialsPage({ onSelectArticle }: EditorialsPageProps)
 
                   {/* Headline */}
                   <h2
-                    onClick={() => onSelectArticle(ed)}
-                    className="text-xl sm:text-2xl font-extrabold text-zinc-900 dark:text-white font-serif hover:text-teal-600 dark:hover:text-teal-400 cursor-pointer leading-snug transition-colors"
+                    className="text-xl sm:text-2xl font-extrabold text-zinc-900 dark:text-white font-serif leading-snug transition-colors"
                   >
                     {ed.headline}
                   </h2>
@@ -231,7 +264,7 @@ export default function EditorialsPage({ onSelectArticle }: EditorialsPageProps)
                       onClick={() => toggleExpand(ed.id)}
                       className="flex items-center space-x-1 font-mono font-bold text-teal-600 dark:text-teal-400 hover:underline cursor-pointer"
                     >
-                      <span>{isExpanded ? "Collapse Analysis" : "Read Clinical Analysis"}</span>
+                      <span>{isExpanded ? "Collapse Editorial" : "Read Editorial"}</span>
                       {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                     </button>
                   </div>

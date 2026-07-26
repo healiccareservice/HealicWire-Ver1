@@ -4,8 +4,9 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { ArrowLeft, Clock, Calendar, Bookmark, Share2, AlertTriangle, Sparkles, HelpCircle, CheckCircle, ChevronRight, User, GraduationCap, Building2, Eye, ShieldAlert, FileText, Send, Star, FileSpreadsheet, RotateCcw, BookOpen, X, Palette, Type, Activity } from "lucide-react";
+import { Sparkles, HelpCircle, CheckCircle, ChevronRight, User, GraduationCap, Building2, Eye, ShieldAlert, FileText, Send, Star, FileSpreadsheet, RotateCcw, BookOpen, X, Palette, Type, Activity, ArrowLeft, Clock, Calendar, Bookmark, Share2, AlertTriangle } from "lucide-react";
 import { Article, EvidenceLevel, Region } from "../types";
+import { supabase } from "../lib/supabase";
 
 interface ArticleDetailProps {
   article: Article;
@@ -130,10 +131,14 @@ export default function ArticleDetail({
   };
 
   // Run claims verification
-  const handleVerifyClaims = () => {
+  const handleVerifyClaims = async () => {
     setVerifying(true);
+    const { data: { session } } = await supabase.auth.getSession();
     fetch(`/api/articles/${article.id}/verify`, {
-      method: "POST"
+      method: "POST",
+      headers: {
+        "Authorization": session ? `Bearer ${session.access_token}` : ""
+      }
     })
       .then(res => res.json())
       .then(data => {
@@ -148,10 +153,14 @@ export default function ArticleDetail({
   };
 
   // Generate Interactive Quiz
-  const handleGenerateQuiz = () => {
+  const handleGenerateQuiz = async () => {
     setGeneratingQuiz(true);
+    const { data: { session } } = await supabase.auth.getSession();
     fetch(`/api/articles/${article.id}/quiz`, {
-      method: "POST"
+      method: "POST",
+      headers: {
+        "Authorization": session ? `Bearer ${session.access_token}` : ""
+      }
     })
       .then(res => res.json())
       .then(() => {
@@ -165,7 +174,7 @@ export default function ArticleDetail({
   };
 
   // Handle clinical Q&A assistant
-  const handleSendChatMessage = (e: React.FormEvent) => {
+  const handleSendChatMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!chatInput.trim()) return;
 
@@ -174,9 +183,13 @@ export default function ArticleDetail({
     setChatInput("");
     setChatLoading(true);
 
+    const { data: { session } } = await supabase.auth.getSession();
     fetch(`/api/articles/${article.id}/assistant`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": session ? `Bearer ${session.access_token}` : ""
+      },
       body: JSON.stringify({ question: userMsg.text, history: chatMessages })
     })
       .then(res => res.json())

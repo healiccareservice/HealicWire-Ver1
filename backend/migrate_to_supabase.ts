@@ -81,9 +81,9 @@ async function migrate() {
     }
   }
 
-  // 3. Migrate Living Guidelines
+  // 3. Migrate Current Guidelines
   if (db.guidelines && db.guidelines.length > 0) {
-    console.log(`Migrating ${db.guidelines.length} living guidelines...`);
+    console.log(`Migrating ${db.guidelines.length} current guidelines...`);
     for (const g of db.guidelines) {
       const payload = {
         condition: g.condition,
@@ -95,7 +95,7 @@ async function migrate() {
         india_relevance: g.indiaRelevance,
         "references": g.references || []
       };
-      const { error } = await supabase.from('living_guidelines').insert(payload);
+      const { error } = await supabase.from('current_guidelines').insert(payload);
       if (error) console.error("Error inserting guideline:", g.condition, error.message);
     }
   }

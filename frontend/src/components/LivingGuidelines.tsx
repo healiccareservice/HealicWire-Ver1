@@ -24,7 +24,7 @@ export default function LivingGuidelines({ title = "Current Guidelines Registry"
   useEffect(() => {
     const fetchGuidelines = async () => {
       try {
-        const { data, error } = await supabase.from('living_guidelines').select('*');
+        const { data, error } = await supabase.from('current_guidelines').select('*');
         if (error) throw error;
         if (data) {
           const mapped = data.map(mapGuidelineFromDB);

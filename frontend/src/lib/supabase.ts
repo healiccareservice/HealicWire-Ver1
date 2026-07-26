@@ -20,7 +20,7 @@ export const mapArticleFromDB = (dbArticle: any): Article => {
     publishedAt: dbArticle.published_at,
     sourcePublishedAt: dbArticle.source_published_at,
     readingTimeMinutes: dbArticle.reading_time_minutes,
-    sourceName: dbArticle.source_name,
+    sourceName: dbArticle.source_name || dbArticle.author_name,
     sourceUrl: dbArticle.source_url,
     evidenceLevel: dbArticle.evidence_level,
     isAIAssisted: dbArticle.is_ai_assisted,

@@ -1,0 +1,10 @@
+.env
+.env.*
+env.yaml
+node_modules/
+dist/
+npm-debug.log
+yarn-error.log
+.gcloudignore
+.git
+.gitignore
