@@ -8,9 +8,9 @@ export default defineConfig({
     port: 5173,
     proxy: {
       "/api": {
-        target: process.env.VITE_API_URL || "http://localhost:8080",
+        target: process.env.VITE_API_URL || "https://healicwire-backend-802231251035.us-central1.run.app",
         changeOrigin: true,
-        secure: false,
+        secure: true,
       },
     },
   },

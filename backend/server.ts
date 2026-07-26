@@ -6,6 +6,7 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import rateLimit from "express-rate-limit";
 import path from "path";
 import fs from "fs";
 import { GoogleGenAI, Type } from "@google/genai";
@@ -199,8 +200,17 @@ async function startServer() {
     next();
   };
 
+  // Rate Limiting for protected admin routes (e.g. AI generation, uploads)
+  const adminLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // Limit each IP to 100 requests per `window` (here, per 15 minutes)
+    message: { error: "Too many requests from this IP, please try again after 15 minutes" },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
   // Protect all admin routes
-  app.use("/api/admin", requireAuth);
+  app.use("/api/admin", requireAuth, adminLimiter);
 
   // Profile management endpoint (bypasses RLS issues for inserts)
   app.post("/api/admin/profile", async (req, res) => {
@@ -859,6 +869,36 @@ async function startServer() {
     res.json(db.events || []);
   });
 
+  // Get public repository items
+  app.get("/api/repository", async (req, res) => {
+    try {
+      const { data, error } = await supabaseAdmin
+        .from("repository")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        throw error;
+      }
+
+      // Map backend snake_case to frontend expected structure
+      const mappedData = data.map((item) => ({
+        id: item.id,
+        title: item.title,
+        subtitle: item.details,
+        img: item.promotion_image,
+        category: item.product_name || "General", // Using product_name as category based on DB structure
+        date: item.created_at,
+        logo: item.logo,
+        productName: item.product_name
+      }));
+
+      res.json(mappedData);
+    } catch (err: any) {
+      console.error("Error fetching repository items:", err);
+      res.status(500).json({ error: err.message || "Failed to fetch repository" });
+    }
+  });
   // Add scientific event
   app.post("/api/scientific-events", requireAuth, async (req, res) => {
     try {

@@ -1,13 +1,31 @@
 import React from 'react';
 import HealicLogo from './HealicLogo';
 
-import { bannerItems } from '../data/bannerData';
+export interface RepositoryItem {
+  id: string;
+  title: string;
+  subtitle: string;
+  img: string;
+  category: string;
+  date: string;
+  logo?: string;
+  productName?: string;
+}
 
 export default function BannerMarquee() {
+  const [bannerItems, setBannerItems] = React.useState<RepositoryItem[]>([]);
+
+  React.useEffect(() => {
+    fetch('/api/repository')
+      .then(res => res.json())
+      .then(data => setBannerItems(data))
+      .catch(err => console.error("Error fetching repository:", err));
+  }, []);
+
   // Duplicate twice so the CSS translateX(-50%) creates a seamless loop
   const items = [...bannerItems, ...bannerItems];
 
-  const handleBannerClick = (item: typeof bannerItems[0]) => {
+  const handleBannerClick = (item: RepositoryItem) => {
     window.history.pushState({}, "", "/repository?q=" + encodeURIComponent(item.title));
     window.dispatchEvent(new Event("popstate"));
   };
@@ -31,7 +49,11 @@ export default function BannerMarquee() {
             
             {/* Logo in the top-left corner */}
             <div className="absolute top-4 left-4 w-9 h-9 bg-white/90 backdrop-blur-sm rounded-lg shadow-md flex items-center justify-center p-1.5 z-10 border border-white/20">
-              <HealicLogo className="w-full h-full" />
+              {item.logo ? (
+                <img src={item.logo} alt="Logo" className="w-full h-full object-contain rounded-md" />
+              ) : (
+                <HealicLogo className="w-full h-full" />
+              )}
             </div>
             <div className="absolute inset-0 flex flex-col justify-end p-5">
               <h3 className="text-white font-bold font-sans tracking-wide text-base leading-tight drop-shadow-lg mb-1.5 line-clamp-1">

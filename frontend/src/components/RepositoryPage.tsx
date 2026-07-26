@@ -1,11 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Share2, Download } from 'lucide-react';
 import HealicLogo from './HealicLogo';
-import { bannerItems } from '../data/bannerData';
+
+interface RepositoryItem {
+  id: string;
+  title: string;
+  subtitle: string;
+  img: string;
+  category: string;
+  date: string;
+  logo?: string;
+  productName?: string;
+}
 
 export default function RepositoryPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [items, setItems] = useState<RepositoryItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -13,12 +25,26 @@ export default function RepositoryPage() {
     if (q) {
       setSearchQuery(q);
     }
+
+    fetch('/api/repository')
+      .then(res => {
+        if (!res.ok) throw new Error("Failed to fetch");
+        return res.json();
+      })
+      .then(data => {
+        setItems(data);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error("Error fetching repository:", err);
+        setLoading(false);
+      });
   }, []);
 
-  const categories = ['All', ...Array.from(new Set(bannerItems.map(item => item.category)))];
+  const categories = ['All', ...Array.from(new Set(items.map(item => item.category)))];
 
   // Sort by date (descending) and filter based on state
-  const filteredItems = bannerItems
+  const filteredItems = items
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     .filter(item => {
       const matchesCategory = selectedCategory === 'All' || item.category === selectedCategory;
@@ -27,7 +53,7 @@ export default function RepositoryPage() {
       return matchesCategory && matchesSearch;
     });
 
-  const captureCardSync = (id: number, item: any): Blob | null => {
+  const captureCardSync = (id: string, item: any): Blob | null => {
     try {
       const imgElement = document.querySelector(`#card-${id} img`) as HTMLImageElement;
       if (!imgElement) return null;
@@ -206,7 +232,11 @@ export default function RepositoryPage() {
           </div>
         </div>
 
-        {filteredItems.length > 0 ? (
+        {loading ? (
+          <div className="flex justify-center items-center py-20">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600"></div>
+          </div>
+        ) : filteredItems.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredItems.map(item => (
               <div 
@@ -222,7 +252,11 @@ export default function RepositoryPage() {
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent pointer-events-none" />
                 
                 <div className="absolute top-4 left-4 w-10 h-10 bg-white/95 rounded-lg shadow-md flex items-center justify-center p-1.5 z-10 border border-white/20 pointer-events-none">
-                  <HealicLogo className="w-full h-full" />
+                  {item.logo ? (
+                    <img src={item.logo} alt="Logo" className="w-full h-full object-contain rounded-md" />
+                  ) : (
+                    <HealicLogo className="w-full h-full" />
+                  )}
                 </div>
                 
                 <div 

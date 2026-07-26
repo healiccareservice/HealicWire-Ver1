@@ -1,15 +1,20 @@
-export interface BannerItem {
-  id: number;
-  title: string;
-  subtitle: string;
-  img: string;
-  category: string;
-  date: string;
+import { createClient } from "@supabase/supabase-js";
+import dotenv from "dotenv";
+
+dotenv.config();
+
+const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  console.error("Missing Supabase credentials in .env");
+  process.exit(1);
 }
 
-export const bannerItems: BannerItem[] = [
+const supabase = createClient(supabaseUrl, supabaseKey);
+
+const bannerItems = [
   { 
-    id: 1, 
     title: 'Global Cardio Summit 2026', 
     subtitle: 'Join leading experts for breakthroughs in cardiovascular care.',
     img: '/marquee/scientific_events.png',
@@ -17,7 +22,6 @@ export const bannerItems: BannerItem[] = [
     date: '2026-08-15'
   },
   { 
-    id: 2, 
     title: 'World Health Organization', 
     subtitle: 'World Mental Health Day - October 10th',
     img: '/marquee/health_days.png',
@@ -25,7 +29,6 @@ export const bannerItems: BannerItem[] = [
     date: '2026-08-10'
   },
   { 
-    id: 3, 
     title: 'Apollo Hospitals', 
     subtitle: 'Experience state-of-the-art robotic surgery for precision care.',
     img: '/marquee/hospital_ads.png',
@@ -33,7 +36,6 @@ export const bannerItems: BannerItem[] = [
     date: '2026-08-05'
   },
   { 
-    id: 4, 
     title: 'HealicWire Wellness', 
     subtitle: 'Manage hypertension effectively with low-sodium diets and daily walks.',
     img: '/marquee/health_tips.png',
@@ -41,7 +43,6 @@ export const bannerItems: BannerItem[] = [
     date: '2026-08-01'
   },
   { 
-    id: 5, 
     title: 'Ministry of Health & Family Welfare', 
     subtitle: 'Updated guidelines released for seasonal influenza vaccination.',
     img: '/marquee/health_info.png',
@@ -49,3 +50,30 @@ export const bannerItems: BannerItem[] = [
     date: '2026-07-25'
   }
 ];
+
+async function seed() {
+  console.log("Seeding public.repository table...");
+
+  for (const item of bannerItems) {
+    const { data, error } = await supabase
+      .from("repository")
+      .insert([
+        {
+          title: item.title,
+          product_name: item.category, // Mapped category to product_name
+          details: item.subtitle,
+          promotion_image: item.img
+        },
+      ]);
+
+    if (error) {
+      console.error(`Failed to insert ${item.title}:`, error.message);
+    } else {
+      console.log(`Inserted ${item.title}`);
+    }
+  }
+
+  console.log("Seeding complete!");
+}
+
+seed();
