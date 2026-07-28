@@ -230,12 +230,57 @@ export default function ArticleDetail({
       .catch(err => console.error(err));
   };
 
-  const handleShare = () => {
-    navigator.clipboard.writeText(window.location.href);
-    setShareText("Copied Link!");
-    setTimeout(() => {
-      setShareText("Share Article");
-    }, 2000);
+  const handleShare = async () => {
+    const isEditorialOrInsight = article.category === "Editorial" || article.category === "Clinical Insights" || (article as any).isEditorial;
+    
+    let shareText = "";
+    if (isEditorialOrInsight) {
+      const authorName = (article as any).author_name || article.sourceName || "HealicWire Expert";
+      shareText = `${article.headline}\n\n${article.summary30s}\n\nAuthor: ${authorName}`;
+    } else {
+      shareText = `${article.headline}\n\n${article.summary30s}`;
+    }
+
+    try {
+      if (navigator.share) {
+        const shareData: ShareData = {
+          title: article.headline,
+          text: shareText,
+          url: window.location.href,
+        };
+
+        // If not an editorial/insight and we have an image, try to attach it if the browser supports sharing files
+        if (!isEditorialOrInsight && article.imageUrl && navigator.canShare) {
+          try {
+            // We fetch the image. If it fails due to CORS, we just catch and ignore.
+            const response = await fetch(article.imageUrl);
+            const blob = await response.blob();
+            // Try to deduce extension, fallback to jpg
+            const mimeType = blob.type || 'image/jpeg';
+            const extension = mimeType.split('/')[1] || 'jpg';
+            const file = new File([blob], `article-image.${extension}`, { type: mimeType });
+            
+            if (navigator.canShare({ files: [file] })) {
+              shareData.files = [file];
+            }
+          } catch (imgErr) {
+            console.warn("Could not attach image to share data", imgErr);
+          }
+        }
+
+        await navigator.share(shareData);
+      } else {
+        await navigator.clipboard.writeText(`${shareText}\n\nRead more at: ${window.location.href}`);
+        setShareText("Copied to Clipboard!");
+        setTimeout(() => setShareText("Share Article"), 2000);
+      }
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') {
+        navigator.clipboard.writeText(`${shareText}\n\nRead more at: ${window.location.href}`);
+        setShareText("Copied to Clipboard!");
+        setTimeout(() => setShareText("Share Article"), 2000);
+      }
+    }
   };
 
   const pStyles = getInteractivePanelStyles(readerTheme);

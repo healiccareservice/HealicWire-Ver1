@@ -64,7 +64,7 @@ export default function ProvidersPage({ onSelectArticle }: ProvidersPageProps) {
           .from("providers")
           .select("*")
           .eq("status", "published")
-          .order("created_at", { ascending: false });
+          .order("published_at", { ascending: false });
 
         if (error) throw error;
         if (data) {

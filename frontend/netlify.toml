@@ -4,7 +4,7 @@
 
 [[redirects]]
   from = "/api/*"
-  to = "https://healicwire-backend-802231251035.us-central1.run.app/api/:splat"
+  to = "https://healicwire-backend-802231251035.asia-south1.run.app/api/:splat"
   status = 200
   force = true
 

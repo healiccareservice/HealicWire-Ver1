@@ -55,35 +55,26 @@ export default function RepositoryPage() {
 
   const captureCardSync = (id: string, item: any): Blob | null => {
     try {
-      const imgElement = document.querySelector(`#card-${id} img`) as HTMLImageElement;
+      const imgElement = document.querySelector(`#card-${id} img.card-bg-img`) as HTMLImageElement;
       if (!imgElement) return null;
 
       const canvas = document.createElement('canvas');
       canvas.width = 1200;
-      canvas.height = 675; // 16:9
+      canvas.height = 775; // 100px header + 675px image (16:9)
       const ctx = canvas.getContext('2d');
       if (!ctx) return null;
 
-      // Draw background image
-      ctx.drawImage(imgElement, 0, 0, canvas.width, canvas.height);
+      // Draw Header Bar for Logos
+      ctx.fillStyle = 'rgba(255, 255, 255, 1)';
+      ctx.fillRect(0, 0, canvas.width, 100);
 
-      // Draw gradient
-      const gradient = ctx.createLinearGradient(0, canvas.height * 0.4, 0, canvas.height);
-      gradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
-      gradient.addColorStop(1, 'rgba(0, 0, 0, 0.9)');
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, canvas.height * 0.4, canvas.width, canvas.height * 0.6);
+      // Draw background image starting below header
+      ctx.drawImage(imgElement, 0, 100, canvas.width, canvas.height - 100);
 
-      // Draw Logo Box
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
-      ctx.beginPath();
-      ctx.roundRect(40, 40, 80, 80, 16);
-      ctx.fill();
-      
-      // Draw Actual Healic Logo
+      // Draw Healic Logo on the Left inside header
       ctx.save();
-      ctx.translate(40 + (80 - 120 * 0.5) / 2, 40 + (80 - 90 * 0.5) / 2);
-      ctx.scale(0.5, 0.5);
+      ctx.translate(40, 10);
+      ctx.scale(0.88, 0.88); // 80px height (90 * 0.88 = 80)
 
       // Left Pillar
       ctx.fillStyle = '#041E42';
@@ -112,16 +103,8 @@ export default function RepositoryPage() {
 
       ctx.restore();
 
-      // Draw Title
-      ctx.fillStyle = 'white';
-      ctx.textAlign = 'left';
-      ctx.font = 'bold 80px sans-serif';
-      ctx.fillText(item.title, 40, canvas.height - 120);
-      
-      // Draw Subtitle
-      ctx.font = '40px sans-serif';
-      ctx.fillStyle = '#e4e4e7';
-      ctx.fillText(item.subtitle, 40, canvas.height - 50);
+      // No overlays - just the image
+
 
       const dataUrl = canvas.toDataURL('image/png');
       const arr = dataUrl.split(',');
@@ -153,8 +136,10 @@ export default function RepositoryPage() {
           files: [file]
         });
         return;
-      } catch (err) {
-        console.log('Share was cancelled or failed:', err);
+      } catch (err: any) {
+        if (err.name !== 'AbortError') {
+          // ignore aborts
+        }
       }
     }
     
@@ -242,26 +227,20 @@ export default function RepositoryPage() {
               <div 
                 key={item.id} 
                 id={`card-${item.id}`}
-                className="relative aspect-video rounded-xl overflow-hidden shadow-lg group bg-black"
+                className="relative flex flex-col rounded-xl overflow-hidden shadow-lg group bg-black"
               >
-                <img 
-                  src={item.img} 
-                  alt={item.title} 
-                  className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 opacity-90 group-hover:opacity-100" 
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent pointer-events-none" />
-                
-                <div className="absolute top-4 left-4 w-10 h-10 bg-white/95 rounded-lg shadow-md flex items-center justify-center p-1.5 z-10 border border-white/20 pointer-events-none">
-                  {item.logo ? (
-                    <img src={item.logo} alt="Logo" className="w-full h-full object-contain rounded-md" />
-                  ) : (
-                    <HealicLogo className="w-full h-full" />
-                  )}
+                <div className="relative aspect-video w-full overflow-hidden">
+                  <img 
+                    src={item.img} 
+                    alt={item.title} 
+                    className="card-bg-img absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" 
+                  />
+                  {/* No overlays - display image only */}
                 </div>
                 
                 <div 
                   id={`actions-${item.id}`}
-                  className="absolute top-4 right-4 flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20"
+                  className="absolute top-[60px] right-4 flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20"
                 >
                   <button 
                     onClick={(e) => handleDownload(e, item)}
@@ -277,15 +256,6 @@ export default function RepositoryPage() {
                   >
                     <Share2 className="w-4 h-4" />
                   </button>
-                </div>
-
-                <div className="absolute inset-0 flex flex-col justify-end p-5 pointer-events-none">
-                  <h3 className="text-white font-bold font-sans tracking-wide text-lg leading-tight drop-shadow-lg mb-1.5 line-clamp-2">
-                    {item.title}
-                  </h3>
-                  <p className="text-zinc-200 text-sm font-sans leading-snug line-clamp-2 drop-shadow-md">
-                    {item.subtitle}
-                  </p>
                 </div>
               </div>
             ))}

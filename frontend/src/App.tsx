@@ -19,6 +19,7 @@ import PortalPage from "./components/PortalPage";
 import EditorialsPage from "./components/EditorialsPage";
 import ClinicalInsightsPage from "./components/ClinicalInsightsPage";
 import WhatWeDoSlider from "./components/WhatWeDoSlider";
+import RepositorySlider from "./components/RepositorySlider";
 import Login from "./components/Login";
 import EditorialCMS from "./components/EditorialCMS";
 import ClinicalInsightsCMS from "./components/ClinicalInsightsCMS";
@@ -209,15 +210,21 @@ export default function App() {
   const [articles, setArticles] = useState<Article[]>([]);
   const [alerts, setAlerts] = useState<HospitalAlert[]>([]);
   
-  const clinicalInsightsScrollRef = useRef<HTMLDivElement>(null);
-  const scrollClinicalInsights = (direction: 'left' | 'right') => {
-    if (clinicalInsightsScrollRef.current) {
-      const scrollAmount = window.innerWidth < 640 ? 300 : 380;
-      clinicalInsightsScrollRef.current.scrollBy({ left: direction === 'left' ? -scrollAmount : scrollAmount, behavior: 'smooth' });
+  const mobileEditorialsScrollRef = useRef<HTMLDivElement>(null);
+  const desktopEditorialsScrollRef = useRef<HTMLDivElement>(null);
+  const mobileClinicalInsightsScrollRef = useRef<HTMLDivElement>(null);
+  const desktopClinicalInsightsScrollRef = useRef<HTMLDivElement>(null);
+
+  const scrollSection = (ref: React.RefObject<HTMLDivElement | null>, direction: 'left' | 'right') => {
+    if (ref.current) {
+      const container = ref.current;
+      const scrollAmount = 396; // 380px min-width + 16px gap
+      const newScrollLeft = container.scrollLeft + (direction === 'left' ? -scrollAmount : scrollAmount);
+      container.scrollTo({ left: newScrollLeft, behavior: 'smooth' });
     }
   };
-  const [latestEditorial, setLatestEditorial] = useState<Article | null>(null);
-  const [latestEditorialProfile, setLatestEditorialProfile] = useState<any | null>(null);
+  const [editorials, setEditorials] = useState<Article[]>([]);
+  const [editorialProfiles, setEditorialProfiles] = useState<Record<string, any>>({});
   const [clinicalInsights, setClinicalInsights] = useState<Article[]>([]);
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
 
@@ -305,47 +312,46 @@ export default function App() {
         .from('editorials')
         .select('*')
         .eq('status', 'published')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .order('published_at', { ascending: false });
 
       let finalData = data;
-      if (!data) {
+      if (!data || data.length === 0) {
         console.warn("Editorials table missing or empty, falling back to articles table for latest editorial");
         const { data: artData, error: artError } = await supabase
           .from('articles')
           .select('*')
           .eq('category', 'Editorial')
           .eq('status', 'published')
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
+          .order('published_at', { ascending: false });
           
         if (!artError) {
           finalData = artData;
         }
       }
 
-      if (finalData) {
-        const mappedEditorial = mapArticleFromDB(finalData);
-        setLatestEditorial(mappedEditorial);
+      if (finalData && finalData.length > 0) {
+        const mappedEditorials = finalData.map(mapArticleFromDB);
+        setEditorials(mappedEditorials);
         
-        if (mappedEditorial.sourceName) {
-          // Fetch the profile corresponding to this editorial's author via API to bypass RLS
+        const uniqueAuthors = Array.from(new Set(mappedEditorials.map(e => e.sourceName).filter(Boolean)));
+        
+        if (uniqueAuthors.length > 0) {
           try {
             const profilesRes = await fetch('/api/profiles');
             if (profilesRes.ok) {
               const profilesData = await profilesRes.json();
-              const profData = profilesData.find((p: any) => 
-                p.name === mappedEditorial.sourceName || p.email === mappedEditorial.sourceName
-              );
-              setLatestEditorialProfile(profData || null);
-            } else {
-              setLatestEditorialProfile(null);
+              const profileMap: Record<string, any> = {};
+              
+              uniqueAuthors.forEach(authorName => {
+                 const profData = profilesData.find((p: any) => p.name === authorName || p.email === authorName);
+                 if (profData) {
+                    profileMap[authorName as string] = profData;
+                 }
+              });
+              setEditorialProfiles(profileMap);
             }
           } catch (e) {
-            console.error("Failed to fetch profile for latest editorial", e);
-            setLatestEditorialProfile(null);
+            console.error("Failed to fetch profiles for editorials", e);
           }
         }
       }
@@ -495,12 +501,7 @@ export default function App() {
   };
 
   // Core filtering logic for search
-  let filteredArticles = articles.filter(a => 
-    a.sourceName !== "HealicWire Special Page Engine" && 
-    !(a as any).isPortalPage &&
-    !a.headline.startsWith("Scientific Events:") &&
-    !a.headline.startsWith("Treatment Update:")
-  );
+  let filteredArticles = [...articles];
 
   // Advanced search prefixes (e.g. category:Clinical, region:india, saved:true)
   const isQueryPrefix = searchQuery.trim().startsWith("category:");
@@ -532,13 +533,16 @@ export default function App() {
   const leadStory = filteredArticles.length > 0 ? filteredArticles[0] : null;
   const feedStories = leadStory ? filteredArticles.slice(1) : [];
 
-  const renderEditorialSection = () => {
-    if (!latestEditorial) {
+  const renderEditorialSection = (scrollRef: React.RefObject<HTMLDivElement | null>) => {
+    if (editorials.length === 0) {
       return (
         <div>
-          <div className="flex items-center gap-3 mb-3">
-            <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wider font-mono shrink-0">Editorial</h3>
-            <p className="text-[11px] font-bold text-zinc-500 dark:text-zinc-400 leading-tight border-l-2 border-teal-500/30 pl-2.5">
+          <div 
+            className="flex items-center gap-3 mb-3 cursor-pointer group"
+            onClick={() => setCurrentTab('editorials')}
+          >
+            <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wider font-mono shrink-0 group-hover:text-teal-600 transition-colors">Editorial</h3>
+            <p className="text-[11px] font-bold text-zinc-500 dark:text-zinc-400 leading-tight border-l-2 border-teal-500/30 pl-2.5 group-hover:text-teal-600 transition-colors">
               Editorial presents thought-provoking perspectives from the HealicWire Editorial Board
             </p>
           </div>
@@ -552,87 +556,127 @@ export default function App() {
 
     return (
       <div>
-        <div className="flex items-center gap-3 mb-3">
-          <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wider font-mono shrink-0">Editorial</h3>
-          <p className="text-[11px] font-bold text-zinc-500 dark:text-zinc-400 leading-tight border-l-2 border-teal-500/30 pl-2.5">
-            Editorial presents thought-provoking perspectives from the HealicWire Editorial Board
-          </p>
-        </div>
-        <div 
-          className="bg-white dark:bg-zinc-950 p-4 rounded-xl border border-teal-200/80 dark:border-teal-800/80 shadow-sm space-y-3 font-sans cursor-pointer group hover:border-teal-500 transition-all" 
-          onClick={() => setCurrentTab("editorials")}
-        >
-          {/* Author Profile Banner - Integrated inside the box */}
-          <div className="p-4 rounded-xl bg-gradient-to-r from-teal-900/10 via-emerald-900/10 to-cyan-900/10 dark:from-teal-950/50 dark:via-emerald-950/50 dark:to-cyan-950/50 border border-teal-200/50 dark:border-teal-800/50 shadow-xs flex flex-col items-center text-center sm:flex-row sm:text-left sm:items-center gap-3 transition-colors">
-            {latestEditorialProfile?.avatar_url ? (
-              <img
-                src={latestEditorialProfile.avatar_url}
-                alt={latestEditorialProfile.name || latestEditorial.sourceName}
-                className="w-14 h-14 rounded-full object-cover border-2 border-teal-600 shadow-sm shrink-0 bg-white"
-              />
-            ) : (!latestEditorialProfile && (!latestEditorial.sourceName || latestEditorial.sourceName === "Dr. K. Narayana K")) ? (
-              <img
-                src="/images/dr_narayana.jpg"
-                alt="Dr. K. Narayana K"
-                className="w-14 h-14 rounded-full object-cover border-2 border-teal-600 shadow-sm shrink-0"
-              />
-            ) : (
-              <div className="w-14 h-14 rounded-full border-2 border-teal-600 shadow-sm shrink-0 bg-teal-100 dark:bg-teal-900 flex items-center justify-center text-teal-600 dark:text-teal-400 font-bold text-xl">
-                {(latestEditorialProfile?.name || latestEditorial.sourceName || "H").charAt(0)}
-              </div>
-            )}
-            <div className="space-y-0.5 flex-1">
-              <h2 className="text-sm font-extrabold text-zinc-900 dark:text-white">
-                {latestEditorialProfile?.name || latestEditorial.sourceName || "Dr. K. Narayana K"}
-              </h2>
-              {(latestEditorialProfile?.degree || (!latestEditorialProfile && (!latestEditorial.sourceName || latestEditorial.sourceName === "Dr. K. Narayana K"))) && (
-                <p className="text-[9px] font-mono text-zinc-600 dark:text-zinc-400 font-semibold tracking-wide">
-                  {latestEditorialProfile?.degree || "MBBS, MD, DipIBLM, FHPE"}
-                </p>
-              )}
-              {(latestEditorialProfile?.role || (!latestEditorialProfile && (!latestEditorial.sourceName || latestEditorial.sourceName === "Dr. K. Narayana K"))) && (
-                <p className="text-[10px] font-sans text-teal-700 dark:text-teal-400 font-bold">
-                  {latestEditorialProfile?.role || "Editor-in-Chief & Lead Strategist"}
-                </p>
-              )}
-            </div>
-          </div>
-
-          <article
-            className="bg-zinc-50 dark:bg-zinc-900/40 rounded-xl border border-zinc-200/80 dark:border-zinc-850/80 shadow-xs transition-all overflow-hidden flex flex-col justify-between"
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <div 
+            className="flex items-center gap-3 cursor-pointer group"
+            onClick={() => setCurrentTab('editorials')}
           >
-            <div className="p-4 space-y-2">
-              {/* Headline */}
-              <h2 className="text-base font-extrabold text-zinc-900 dark:text-white font-serif leading-snug">
-                {latestEditorial.headline}
-              </h2>
+            <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wider font-mono shrink-0 group-hover:text-teal-600 transition-colors">Editorial</h3>
+            <p className="hidden sm:block text-[11px] font-bold text-zinc-500 dark:text-zinc-400 leading-tight border-l-2 border-teal-500/30 pl-2.5 group-hover:text-teal-600 transition-colors">
+              Editorial presents thought-provoking perspectives from the HealicWire Editorial Board
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button 
+              type="button"
+              onClick={() => scrollSection(scrollRef, 'left')}
+              className="p-1.5 rounded-full bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-500 hover:text-teal-600 hover:border-teal-500 transition-colors shadow-sm cursor-pointer z-10 relative"
+              aria-label="Scroll left"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button 
+              type="button"
+              onClick={() => scrollSection(scrollRef, 'right')}
+              className="p-1.5 rounded-full bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-500 hover:text-teal-600 hover:border-teal-500 transition-colors shadow-sm cursor-pointer z-10 relative"
+              aria-label="Scroll right"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+        
+        <div 
+          ref={scrollRef}
+          className="flex overflow-x-auto snap-x snap-mandatory gap-4 pb-2 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+        >
+          {editorials.map((editorial, idx) => {
+            const profile = editorialProfiles[editorial.sourceName || ''];
+            return (
+              <div 
+                key={editorial.id || idx}
+                className="min-w-[300px] sm:min-w-[380px] w-full max-w-full bg-white dark:bg-zinc-950 p-4 rounded-xl border border-teal-200/80 dark:border-teal-800/80 shadow-sm space-y-3 font-sans cursor-pointer group hover:border-teal-500 transition-all snap-center shrink-0 flex flex-col" 
+                onClick={() => {
+                  setCurrentTab('editorials');
+                }}
+              >
+                {/* Author Profile Banner - Integrated inside the box */}
+                <div className="p-4 rounded-xl bg-gradient-to-r from-teal-900/10 via-emerald-900/10 to-cyan-900/10 dark:from-teal-950/50 dark:via-emerald-950/50 dark:to-cyan-950/50 border border-teal-200/50 dark:border-teal-800/50 shadow-xs flex flex-col items-center text-center sm:flex-row sm:text-left sm:items-center gap-3 transition-colors">
+                  {profile?.avatar_url ? (
+                    <img
+                      src={profile.avatar_url}
+                      alt={profile.name || editorial.sourceName}
+                      className="w-14 h-14 rounded-full object-cover border-2 border-teal-600 shadow-sm shrink-0 bg-white"
+                    />
+                  ) : (!profile && (!editorial.sourceName || editorial.sourceName === "Dr. K. Narayana K")) ? (
+                    <img
+                      src="/images/dr_narayana.jpg"
+                      alt="Dr. K. Narayana K"
+                      className="w-14 h-14 rounded-full object-cover border-2 border-teal-600 shadow-sm shrink-0"
+                    />
+                  ) : (
+                    <div className="w-14 h-14 rounded-full border-2 border-teal-600 shadow-sm shrink-0 bg-teal-100 dark:bg-teal-900 flex items-center justify-center text-teal-600 dark:text-teal-400 font-bold text-xl">
+                      {(profile?.name || editorial.sourceName || "H").charAt(0)}
+                    </div>
+                  )}
+                  <div className="space-y-0.5 flex-1 min-w-0">
+                    <h2 className="text-sm font-extrabold text-zinc-900 dark:text-white truncate">
+                      {profile?.name || editorial.sourceName || "Dr. K. Narayana K"}
+                    </h2>
+                    {(profile?.degree || (!profile && (!editorial.sourceName || editorial.sourceName === "Dr. K. Narayana K"))) && (
+                      <p className="text-[9px] font-mono text-zinc-600 dark:text-zinc-400 font-semibold tracking-wide truncate">
+                        {profile?.degree || "MBBS, MD, DipIBLM, FHPE"}
+                      </p>
+                    )}
+                    {(profile?.role || (!profile && (!editorial.sourceName || editorial.sourceName === "Dr. K. Narayana K"))) && (
+                      <p className="text-[10px] font-sans text-teal-700 dark:text-teal-400 font-bold truncate">
+                        {profile?.role || "Editor-in-Chief & Lead Strategist"}
+                      </p>
+                    )}
+                  </div>
+                </div>
 
-              {/* 30-Second Summary */}
-              <p className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed font-sans line-clamp-2">
-                {latestEditorial.summary30s}
-              </p>
-            </div>
+                <article
+                  className="bg-zinc-50 dark:bg-zinc-900/40 rounded-xl border border-zinc-200/80 dark:border-zinc-850/80 shadow-xs transition-all overflow-hidden flex flex-col flex-1"
+                >
+                  <div className="p-4 space-y-2 flex-1">
+                    {/* Headline */}
+                    <h2 className="text-base font-extrabold text-zinc-900 dark:text-white font-serif leading-snug line-clamp-2">
+                      {editorial.headline}
+                    </h2>
 
-            {/* Footer Action Strip */}
-            <div className="px-4 py-2.5 bg-white dark:bg-zinc-950 border-t border-zinc-100 dark:border-zinc-900 flex flex-wrap items-center justify-between text-[11px]">
-              <div className="flex items-center space-x-1 font-mono font-bold text-teal-600 dark:text-teal-400 group-hover:underline">
-                <span>Read Editorial</span>
-                <ChevronRight className="w-3 h-3" />
+                    {/* 30-Second Summary */}
+                    <p className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed font-sans line-clamp-2">
+                      {editorial.summary30s}
+                    </p>
+                  </div>
+
+                  {/* Footer Action Strip */}
+                  <div className="px-4 py-2.5 bg-white dark:bg-zinc-950 border-t border-zinc-100 dark:border-zinc-900 flex flex-wrap items-center justify-between text-[11px] mt-auto">
+                    <div className="flex items-center space-x-1 font-mono font-bold text-teal-600 dark:text-teal-400 group-hover:underline">
+                      <span>View All Editorials</span>
+                      <ChevronRight className="w-3 h-3" />
+                    </div>
+                  </div>
+                </article>
               </div>
-            </div>
-          </article>
+            );
+          })}
         </div>
       </div>
     );
   };
 
-  const renderClinicalInsightsSection = () => {
+  const renderClinicalInsightsSection = (scrollRef: React.RefObject<HTMLDivElement | null>) => {
     if (clinicalInsights.length === 0) {
       return (
         <div>
-          <div className="flex items-center gap-3 mb-3">
-            <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wider font-mono shrink-0">Clinical Insights</h3>
-            <p className="text-[11px] font-bold text-zinc-500 dark:text-zinc-400 leading-tight border-l-2 border-teal-500/30 pl-2.5">
+          <div 
+            className="flex items-center gap-3 mb-3 cursor-pointer group"
+            onClick={() => setCurrentTab('clinical-insights')}
+          >
+            <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wider font-mono shrink-0 group-hover:text-teal-600 transition-colors">Clinical Insights</h3>
+            <p className="text-[11px] font-bold text-zinc-500 dark:text-zinc-400 leading-tight border-l-2 border-teal-500/30 pl-2.5 group-hover:text-teal-600 transition-colors">
               Curated articles by experts associated with HealicWire
             </p>
           </div>
@@ -647,23 +691,28 @@ export default function App() {
     return (
       <div>
         <div className="flex items-center justify-between gap-3 mb-3">
-          <div className="flex items-center gap-3">
-            <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wider font-mono shrink-0">Clinical Insights</h3>
-            <p className="hidden sm:block text-[11px] font-bold text-zinc-500 dark:text-zinc-400 leading-tight border-l-2 border-teal-500/30 pl-2.5">
+          <div 
+            className="flex items-center gap-3 cursor-pointer group"
+            onClick={() => setCurrentTab('clinical-insights')}
+          >
+            <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wider font-mono shrink-0 group-hover:text-teal-600 transition-colors">Clinical Insights</h3>
+            <p className="hidden sm:block text-[11px] font-bold text-zinc-500 dark:text-zinc-400 leading-tight border-l-2 border-teal-500/30 pl-2.5 group-hover:text-teal-600 transition-colors">
               Curated articles by experts associated with HealicWire
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <button 
-              onClick={() => scrollClinicalInsights('left')}
-              className="p-1.5 rounded-full bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-500 hover:text-teal-600 hover:border-teal-500 transition-colors shadow-sm cursor-pointer"
+              type="button"
+              onClick={() => scrollSection(scrollRef, 'left')}
+              className="p-1.5 rounded-full bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-500 hover:text-teal-600 hover:border-teal-500 transition-colors shadow-sm cursor-pointer z-10 relative"
               aria-label="Scroll left"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
             <button 
-              onClick={() => scrollClinicalInsights('right')}
-              className="p-1.5 rounded-full bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-500 hover:text-teal-600 hover:border-teal-500 transition-colors shadow-sm cursor-pointer"
+              type="button"
+              onClick={() => scrollSection(scrollRef, 'right')}
+              className="p-1.5 rounded-full bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-500 hover:text-teal-600 hover:border-teal-500 transition-colors shadow-sm cursor-pointer z-10 relative"
               aria-label="Scroll right"
             >
               <ChevronRight className="w-4 h-4" />
@@ -672,14 +721,14 @@ export default function App() {
         </div>
         
         <div 
-          ref={clinicalInsightsScrollRef}
-          className="flex overflow-x-auto snap-x snap-mandatory gap-4 pb-2 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] scroll-smooth"
+          ref={scrollRef}
+          className="flex overflow-x-auto snap-x snap-mandatory gap-4 pb-2 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
         >
           {clinicalInsights.map((insight, idx) => (
             <div 
               key={insight.id || idx}
               className="min-w-[300px] sm:min-w-[380px] w-full max-w-full bg-white dark:bg-zinc-950 p-4 rounded-xl border border-teal-200/80 dark:border-teal-800/80 shadow-sm space-y-3 font-sans cursor-pointer group hover:border-teal-500 transition-all snap-center shrink-0 flex flex-col" 
-              onClick={() => setCurrentTab("clinical-insights")}
+              onClick={() => setCurrentTab('clinical-insights')}
             >
               {/* Author Profile Banner - Integrated inside the box */}
               <div className="p-4 rounded-xl bg-gradient-to-r from-teal-900/10 via-emerald-900/10 to-cyan-900/10 dark:from-teal-950/50 dark:via-emerald-950/50 dark:to-cyan-950/50 border border-teal-200/50 dark:border-teal-800/50 shadow-xs flex flex-col items-center text-center sm:flex-row sm:text-left sm:items-center gap-3 transition-colors">
@@ -719,7 +768,7 @@ export default function App() {
                 {/* Footer Action Strip */}
                 <div className="px-4 py-2.5 bg-white dark:bg-zinc-950 border-t border-zinc-100 dark:border-zinc-900 flex flex-wrap items-center justify-between text-[11px] mt-auto">
                   <div className="flex items-center space-x-1 font-mono font-bold text-teal-600 dark:text-teal-400 group-hover:underline">
-                    <span>Read Clinical Insights</span>
+                    <span>View All Insights</span>
                     <ChevronRight className="w-3 h-3" />
                   </div>
                 </div>
@@ -932,6 +981,7 @@ export default function App() {
                         </div>
                       )}
 
+
                       {/* Mobile Layout Override: Specific ordering requested by user */}
                       <div className="lg:hidden flex flex-col space-y-6 my-4">
                         {/* 2. Global Healthcare News Header */}
@@ -959,8 +1009,8 @@ export default function App() {
 
                         {/* 4. Editorial and 5. Clinical Insights */}
                         <div className="space-y-8 py-2">
-                          {renderEditorialSection()}
-                          {renderClinicalInsightsSection()}
+                          {renderEditorialSection(mobileEditorialsScrollRef)}
+                          {renderClinicalInsightsSection(mobileClinicalInsightsScrollRef)}
                         </div>
 
                         {/* 6. Rest of News (if available) */}
@@ -1168,10 +1218,10 @@ export default function App() {
               {/* DESKTOP ONLY: Editorial and Clinical Insights (hidden on mobile, as they are rendered inline above) */}
               <div className="hidden lg:block space-y-8">
                 {/* EDITORIALS SECTION WITH PHOTO & EDITOR INFORMATION */}
-                {renderEditorialSection()}
+                {renderEditorialSection(desktopEditorialsScrollRef)}
 
                 {/* CLINICAL INSIGHTS SECTION WITH PHOTO & EDITOR INFORMATION */}
-                {renderClinicalInsightsSection()}
+                {renderClinicalInsightsSection(desktopClinicalInsightsScrollRef)}
               </div>
 
               {/* TODAY'S CLINICAL BRIEFING */}
@@ -1288,6 +1338,11 @@ export default function App() {
                     </button>
                   </form>
                 )}
+              </div>
+
+              {/* REPOSITORY ITEMS SLIDER (CMS CONFIGURED) */}
+              <div className="mb-6">
+                <RepositorySlider />
               </div>
 
               {/* WHAT WE DO INTERACTIVE SLIDER */}

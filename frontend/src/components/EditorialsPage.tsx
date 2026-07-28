@@ -34,13 +34,13 @@ export default function EditorialsPage({ onSelectArticle }: EditorialsPageProps)
   useEffect(() => {
     const fetchEditorials = async () => {
       try {
-        const edRes = await supabase.from('editorials').select('*').eq('status', 'published').order('created_at', { ascending: false });
+        const edRes = await supabase.from('editorials').select('*').eq('status', 'published').order('published_at', { ascending: false });
         
         let finalData = edRes.data;
         if (edRes.error) {
           if (edRes.error.code === '42P01' || edRes.error.message.includes('does not exist')) {
             console.warn("Editorials table missing, falling back to articles table");
-            const { data: artData, error: artError } = await supabase.from('articles').select('*').eq('category', 'Editorial').eq('status', 'published').order('created_at', { ascending: false });
+            const { data: artData, error: artError } = await supabase.from('articles').select('*').eq('category', 'Editorial').eq('status', 'published').order('published_at', { ascending: false });
             if (artError) throw artError;
             finalData = artData;
           } else {
@@ -79,8 +79,31 @@ export default function EditorialsPage({ onSelectArticle }: EditorialsPageProps)
 
   const toggleExpand = (id: string) => {
     setExpandedIds(prev =>
-      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
     );
+  };
+
+  const handleShare = async (article: any, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const authorName = article.author_name || article.sourceName || "HealicWire Expert";
+    const shareText = `${article.headline}\n\n${article.summary30s}\n\nAuthor: ${authorName}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: article.headline,
+          text: shareText,
+          url: window.location.href,
+        });
+      } else {
+        await navigator.clipboard.writeText(`${shareText}\n\nRead more at: ${window.location.href}`);
+        alert("Link and content copied to clipboard!");
+      }
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') {
+        navigator.clipboard.writeText(`${shareText}\n\nRead more at: ${window.location.href}`);
+        alert("Link and content copied to clipboard!");
+      }
+    }
   };
 
   const toggleSave = (id: string, e: React.MouseEvent) => {
@@ -270,6 +293,13 @@ export default function EditorialsPage({ onSelectArticle }: EditorialsPageProps)
                   </div>
 
                   <div className="flex items-center space-x-3">
+                    <button
+                      onClick={(e) => handleShare(ed, e)}
+                      className="p-1.5 rounded-lg text-zinc-400 hover:text-teal-600 hover:bg-teal-50 dark:hover:bg-zinc-900 transition-colors"
+                      title="Share Editorial"
+                    >
+                      <Share2 className="w-4 h-4" />
+                    </button>
                     <button
                       onClick={(e) => toggleSave(ed.id, e)}
                       className="p-1.5 rounded-lg text-zinc-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-zinc-900 transition-colors"

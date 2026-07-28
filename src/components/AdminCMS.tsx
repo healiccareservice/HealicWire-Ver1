@@ -51,10 +51,23 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
   const [corrections, setCorrections] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // Navigation tabs: "catalog" | "write_editorial" | "generate_news" | "create_pages" | "manage_scientific_events" | "queue" | "corrections"
+  // Navigation tabs
   const [activeTab, setActiveTab] = useState<
-    "catalog" | "write_editorial" | "generate_news" | "create_pages" | "manage_scientific_events" | "queue" | "corrections"
+    "catalog" | "write_editorial" | "generate_news" | "create_pages" | "manage_scientific_events" | "queue" | "corrections" | "advertisements_ms"
   >("catalog");
+
+  // Advertisements MS State
+  const [advertisementsList, setAdvertisementsList] = useState<any[]>([]);
+  const [adForm, setAdForm] = useState({
+    title: "",
+    logoUrl: "",
+    name: "",
+    details: "",
+    promoImage: "",
+    targetPage: "All Pages" as "All Pages" | "Landing Page" | "Scientific Events Page" | "Providers & Institutions Page" | "Pharma & Drugs Intelligence" | "Treatment Updates" | "Current Guidelines"
+  });
+  const [adSuccessMsg, setAdSuccessMsg] = useState<string | null>(null);
+  const [isAdSubmitting, setIsAdSubmitting] = useState(false);
 
   // Editorial Form State
   const [bulkNewsDate, setBulkNewsDate] = useState(new Date().toISOString().split("T")[0]);
@@ -549,6 +562,76 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
     fetch("/api/admin/event-assets")
       .then(res => res.json())
       .then(data => setEventAssets(Array.isArray(data) ? data : []))
+      .catch(err => console.error(err));
+
+    fetch("/api/admin/advertisements")
+      .then(res => res.json())
+      .then(data => setAdvertisementsList(Array.isArray(data) ? data : []))
+      .catch(err => console.error(err));
+  };
+
+  const handleAdSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!adForm.title.trim()) return;
+
+    setIsAdSubmitting(true);
+    setAdSuccessMsg(null);
+
+    fetch("/api/admin/advertisements", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(adForm)
+    })
+      .then(res => res.json())
+      .then(data => {
+        setIsAdSubmitting(false);
+        setAdSuccessMsg(`Successfully created advertisement: "${data.title}"`);
+        setAdForm({
+          title: "",
+          logoUrl: "",
+          name: "",
+          details: "",
+          promoImage: "",
+          targetPage: "All Pages"
+        });
+        fetchData();
+      })
+      .catch(err => {
+        setIsAdSubmitting(false);
+        console.error(err);
+        alert("Failed to save advertisement.");
+      });
+  };
+
+  const handleAdLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      if (event.target?.result) {
+        setAdForm(prev => ({ ...prev, logoUrl: event.target!.result as string }));
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleAdPromoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      if (event.target?.result) {
+        setAdForm(prev => ({ ...prev, promoImage: event.target!.result as string }));
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleAdDelete = (id: string) => {
+    if (!confirm("Are you sure you want to delete this advertisement?")) return;
+    fetch(`/api/admin/advertisements/${id}`, { method: "DELETE" })
+      .then(res => res.json())
+      .then(() => fetchData())
       .catch(err => console.error(err));
   };
 
@@ -1089,6 +1172,21 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
                   <div className="flex items-center space-x-2.5">
                     <Calendar className="w-4 h-4 text-blue-600" />
                     <span>Manage Scientific Event</span>
+                  </div>
+                </button>
+
+                {/* 4.6. Advertisements MS (Below Manage Scientific Event) */}
+                <button
+                  onClick={() => { setActiveTab("advertisements_ms"); setEditingArticle(null); }}
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-semibold transition-all ${
+                    activeTab === "advertisements_ms"
+                      ? "bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 font-bold border border-rose-200/80 dark:border-rose-800/80"
+                      : "text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800/60"
+                  }`}
+                >
+                  <div className="flex items-center space-x-2.5">
+                    <ImageIcon className="w-4 h-4 text-rose-600" />
+                    <span>Advertisements MS</span>
                   </div>
                 </button>
 
@@ -2920,6 +3018,196 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
                           </div>
                         </div>
                       ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 4.6. ADVERTISEMENTS MS TAB */}
+                {activeTab === "advertisements_ms" && (
+                  <div className="max-w-4xl mx-auto space-y-6 pb-8 font-sans">
+                    {adSuccessMsg && (
+                      <div className="p-4 rounded-xl bg-green-50 dark:bg-green-950/60 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-200 text-xs font-semibold flex items-center space-x-2.5">
+                        <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
+                        <span>{adSuccessMsg}</span>
+                      </div>
+                    )}
+
+                    <form onSubmit={handleAdSubmit} className="space-y-6 bg-white dark:bg-zinc-950 p-6 sm:p-8 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
+                      <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-900 pb-4 mb-4">
+                        <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase font-mono flex items-center space-x-2">
+                          <ImageIcon className="w-5 h-5 text-rose-600" />
+                          <span>Create Advertisement</span>
+                        </h3>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="md:col-span-2">
+                          <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
+                            Title *
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            value={adForm.title}
+                            onChange={e => setAdForm({ ...adForm, title: e.target.value })}
+                            placeholder="Advertisement Title"
+                            className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white"
+                          />
+                        </div>
+
+                        <div className="md:col-span-2">
+                          <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
+                            Logo of the Company / Product Information URL *
+                          </label>
+                          <div className="flex space-x-2">
+                            <input
+                              type="text"
+                              required
+                              value={adForm.logoUrl}
+                              onChange={e => setAdForm({ ...adForm, logoUrl: e.target.value })}
+                              placeholder="Paste URL or upload image ->"
+                              className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white"
+                            />
+                            <div className="relative flex-shrink-0">
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={handleAdLogoUpload}
+                                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                              />
+                              <button
+                                type="button"
+                                className="px-3 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-lg text-xs font-bold text-zinc-700 dark:text-zinc-300 flex items-center space-x-1 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+                              >
+                                <UploadCloud className="w-4 h-4" />
+                                <span>Upload Logo</span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="md:col-span-2">
+                          <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
+                            Name (Hospital, Brand, Company, Event, etc.) *
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            value={adForm.name}
+                            onChange={e => setAdForm({ ...adForm, name: e.target.value })}
+                            placeholder="e.g. HealicWire Special Event"
+                            className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white"
+                          />
+                        </div>
+
+                        <div className="md:col-span-2">
+                          <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
+                            Details (Key Highlights, Tips, Health Info) *
+                          </label>
+                          <textarea
+                            required
+                            rows={3}
+                            value={adForm.details}
+                            onChange={e => setAdForm({ ...adForm, details: e.target.value })}
+                            placeholder="Add key highlights or relevant health information..."
+                            className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white"
+                          />
+                        </div>
+
+                        <div className="md:col-span-2">
+                          <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
+                            Promotion Image URL *
+                          </label>
+                          <div className="flex space-x-2">
+                            <input
+                              type="text"
+                              required
+                              value={adForm.promoImage}
+                              onChange={e => setAdForm({ ...adForm, promoImage: e.target.value })}
+                              placeholder="Paste URL or upload image ->"
+                              className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white"
+                            />
+                            <div className="relative flex-shrink-0">
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={handleAdPromoUpload}
+                                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                              />
+                              <button
+                                type="button"
+                                className="px-3 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-lg text-xs font-bold text-zinc-700 dark:text-zinc-300 flex items-center space-x-1 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+                              >
+                                <UploadCloud className="w-4 h-4" />
+                                <span>Upload Image</span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="md:col-span-2">
+                          <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
+                            Target Page *
+                          </label>
+                          <select
+                            value={adForm.targetPage}
+                            onChange={e => setAdForm({ ...adForm, targetPage: e.target.value as any })}
+                            className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white"
+                          >
+                            <option value="All Pages">All Pages</option>
+                            <option value="Landing Page">Landing Page (www.healicwire.com/)</option>
+                            <option value="Scientific Events Page">Scientific Events Page (/scientificevents)</option>
+                            <option value="Providers & Institutions Page">Providers & Institutions Page (/providers)</option>
+                            <option value="Pharma & Drugs Intelligence">Pharma & Drugs Intelligence (/pharmadrugs)</option>
+                            <option value="Treatment Updates">Clinical Treatment Updates Page (/treatmentupdate)</option>
+                            <option value="Current Guidelines">Current Guidelines Registry (/guidelines)</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="pt-4 border-t border-zinc-100 dark:border-zinc-900 flex justify-end">
+                        <button
+                          type="submit"
+                          disabled={isAdSubmitting}
+                          className="px-6 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-bold text-xs flex items-center space-x-2 shadow-sm transition-all cursor-pointer"
+                        >
+                          {isAdSubmitting ? "Creating..." : "Create Advertisement"}
+                        </button>
+                      </div>
+                    </form>
+
+                    {/* Ads List */}
+                    <div className="bg-white dark:bg-zinc-950 p-6 sm:p-8 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm space-y-4">
+                      <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-900 pb-3">
+                        <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase font-mono flex items-center space-x-2">
+                          <ImageIcon className="w-4 h-4 text-rose-600" />
+                          <span>Active Advertisements ({advertisementsList.length})</span>
+                        </h3>
+                      </div>
+
+                      {advertisementsList.length === 0 ? (
+                        <div className="text-center py-8 text-xs text-zinc-400 font-mono">
+                          No advertisements created yet.
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {advertisementsList.map((ad: any) => (
+                            <div key={ad.id} className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 flex justify-between items-start">
+                              <div className="space-y-1">
+                                <h4 className="font-bold text-sm text-zinc-900 dark:text-white">{ad.title}</h4>
+                                <div className="text-xs text-zinc-500 font-mono">Company/Brand: {ad.name}</div>
+                                <div className="text-[11px] text-rose-600 font-mono font-bold">Target: {ad.targetPage}</div>
+                              </div>
+                              <button
+                                onClick={() => handleAdDelete(ad.id)}
+                                className="p-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 cursor-pointer"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}

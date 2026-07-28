@@ -1,5 +1,4 @@
 import React from 'react';
-import HealicLogo from './HealicLogo';
 
 export interface RepositoryItem {
   id: string;
@@ -16,11 +15,27 @@ export default function BannerMarquee() {
   const [bannerItems, setBannerItems] = React.useState<RepositoryItem[]>([]);
 
   React.useEffect(() => {
-    fetch('/api/repository')
-      .then(res => res.json())
-      .then(data => setBannerItems(data))
-      .catch(err => console.error("Error fetching repository:", err));
+    Promise.all([
+      fetch('/api/repository').then(res => res.json()),
+      fetch('/api/admin/slider-settings').then(res => res.json())
+    ])
+    .then(([repoData, settingsData]) => {
+      if (Array.isArray(repoData)) {
+        const selectedIds = settingsData?.selectedIds || [];
+        const maxItems = settingsData?.maxItems || 3;
+        
+        // Filter and limit items based on settings
+        const activeItems = repoData
+          .filter(item => selectedIds.includes(item.id))
+          .slice(0, maxItems);
+          
+        setBannerItems(activeItems);
+      }
+    })
+    .catch(err => console.error("Error fetching banner data:", err));
   }, []);
+
+  if (bannerItems.length === 0) return null;
 
   // Duplicate twice so the CSS translateX(-50%) creates a seamless loop
   const items = [...bannerItems, ...bannerItems];
@@ -37,31 +52,17 @@ export default function BannerMarquee() {
           <div 
             key={`${item.id}-${idx}`} 
             onClick={() => handleBannerClick(item)}
-            className="relative w-[400px] h-[225px] mx-4 rounded-xl overflow-hidden shadow-lg group cursor-pointer shrink-0"
+            className="relative w-[400px] flex flex-col mx-4 rounded-xl overflow-hidden shadow-lg group cursor-pointer shrink-0 bg-black"
           >
-            <img 
-              src={item.img} 
-              alt={item.title} 
-              referrerPolicy="no-referrer"
-              className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 opacity-90 group-hover:opacity-100" 
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-            
-            {/* Logo in the top-left corner */}
-            <div className="absolute top-4 left-4 w-9 h-9 bg-white/90 backdrop-blur-sm rounded-lg shadow-md flex items-center justify-center p-1.5 z-10 border border-white/20">
-              {item.logo ? (
-                <img src={item.logo} alt="Logo" className="w-full h-full object-contain rounded-md" />
-              ) : (
-                <HealicLogo className="w-full h-full" />
-              )}
-            </div>
-            <div className="absolute inset-0 flex flex-col justify-end p-5">
-              <h3 className="text-white font-bold font-sans tracking-wide text-base leading-tight drop-shadow-lg mb-1.5 line-clamp-1">
-                {item.title}
-              </h3>
-              <p className="text-zinc-200 text-xs font-sans leading-snug line-clamp-2 drop-shadow-md">
-                {item.subtitle}
-              </p>
+            <div className="relative h-[225px] w-full overflow-hidden">
+              <img 
+                src={item.img} 
+                alt={item.title} 
+                referrerPolicy="no-referrer"
+                className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" 
+              />
+              
+              {/* No overlays - display image only */}
             </div>
           </div>
         ))}

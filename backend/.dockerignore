@@ -1,0 +1,11 @@
+node_modules
+dist
+.env
+.env.*
+env.yaml
+!env.example
+*.log
+.git
+.github
+*.md
+.DS_Store

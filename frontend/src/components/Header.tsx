@@ -265,7 +265,12 @@ export default function Header({
                 : "text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border-amber-300/80 dark:border-amber-800/80 hover:bg-amber-100"
             }`}
           >
-            <span>🇮🇳</span>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 225 150" className="w-3.5 h-2.5 rounded-[1px] shadow-sm shrink-0">
+              <rect width="225" height="150" fill="#f93"/>
+              <rect width="225" height="100" y="50" fill="#fff"/>
+              <rect width="225" height="50" y="100" fill="#128807"/>
+              <circle cx="112.5" cy="75" r="20" fill="#000088"/>
+            </svg>
             <span>India Focus</span>
           </button>
         </div>

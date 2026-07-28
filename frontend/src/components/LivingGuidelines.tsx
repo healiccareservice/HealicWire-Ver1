@@ -251,7 +251,13 @@ export default function LivingGuidelines({ title = "Current Guidelines Registry"
                     <div className="space-y-1.5">
                       <div className="flex items-center space-x-1.5 text-amber-700 dark:text-amber-400 font-bold text-xs uppercase tracking-wider">
                         <AlertCircle className="w-3.5 h-3.5" />
-                        <span>🇮🇳 India Applicability & Context</span>
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 225 150" className="w-3.5 h-2.5 rounded-[1px] shadow-sm shrink-0">
+                          <rect width="225" height="150" fill="#f93"/>
+                          <rect width="225" height="100" y="50" fill="#fff"/>
+                          <rect width="225" height="50" y="100" fill="#128807"/>
+                          <circle cx="112.5" cy="75" r="20" fill="#000088"/>
+                        </svg>
+                        <span>India Applicability & Context</span>
                       </div>
                       <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed bg-amber-500/5 dark:bg-amber-950/20 p-3 rounded-lg border border-amber-500/10 dark:border-amber-900/30">
                         {g.indiaRelevance}

@@ -4,7 +4,7 @@
  */
 
 import React from "react";
-import { Calendar, Clock, Bookmark, Sparkles, Globe } from "lucide-react";
+import { Clock, Bookmark, Calendar, Share2, Sparkles } from "lucide-react";
 import { Article, EvidenceLevel, Region } from "../types";
 
 interface ArticleCardProps {
@@ -49,6 +49,53 @@ export default function ArticleCard({
         return "bg-orange-50 text-orange-700 dark:bg-orange-950/20 dark:text-orange-400 border-orange-200/50 dark:border-orange-900";
       default:
         return "bg-zinc-50 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800";
+    }
+  };
+
+  const handleShare = async (article: Article, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const isEditorialOrInsight = article.category === "Editorial" || article.category === "Clinical Insights" || (article as any).isEditorial;
+    
+    let shareText = "";
+    if (isEditorialOrInsight) {
+      const authorName = (article as any).author_name || article.sourceName || "HealicWire Expert";
+      shareText = `${article.headline}\n\n${article.summary30s}\n\nAuthor: ${authorName}`;
+    } else {
+      shareText = `${article.headline}\n\n${article.summary30s}`;
+    }
+
+    try {
+      if (navigator.share) {
+        const shareData: ShareData = {
+          title: article.headline,
+          text: shareText,
+          url: window.location.href,
+        };
+
+        if (!isEditorialOrInsight && article.imageUrl && navigator.canShare) {
+          try {
+            const response = await fetch(article.imageUrl);
+            const blob = await response.blob();
+            const mimeType = blob.type || 'image/jpeg';
+            const extension = mimeType.split('/')[1] || 'jpg';
+            const file = new File([blob], `article-image.${extension}`, { type: mimeType });
+            if (navigator.canShare({ files: [file] })) {
+              shareData.files = [file];
+            }
+          } catch (imgErr) {
+            console.warn("Could not attach image to share data", imgErr);
+          }
+        }
+        await navigator.share(shareData);
+      } else {
+        await navigator.clipboard.writeText(`${shareText}\n\nRead more at: ${window.location.href}`);
+        alert("Link and content copied to clipboard!");
+      }
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') {
+        navigator.clipboard.writeText(`${shareText}\n\nRead more at: ${window.location.href}`);
+        alert("Link and content copied to clipboard!");
+      }
     }
   };
 
@@ -122,13 +169,16 @@ export default function ArticleCard({
           <span className={`text-[10px] font-mono px-2.5 py-1 rounded-md border font-medium shadow-sm backdrop-blur-sm ${getEvidenceColor(article.evidenceLevel)}`}>
             {article.evidenceLevel}
           </span>
-          {article.region === Region.INDIA && (
-            <span className={`text-[10px] font-mono px-2.5 py-1 rounded-md border font-medium shadow-sm flex items-center space-x-1 ${getIndiaRelevanceBadge(article.indiaRelevance.status)}`}>
-              <span>🇮🇳</span>
-              <span>{article.indiaRelevance.status}</span>
-            </span>
-          )}
+
         </div>
+
+        {/* Share Article Button */}
+        <button
+          onClick={(e) => handleShare(article, e)}
+          className="absolute top-3 right-12 p-1.5 rounded-full bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm text-zinc-600 dark:text-zinc-300 hover:bg-white dark:hover:bg-zinc-900 border border-zinc-200/50 dark:border-zinc-850 shadow-sm z-10 transition-all"
+        >
+          <Share2 className="w-3.5 h-3.5" />
+        </button>
 
         {/* Save Article Button */}
         <button
