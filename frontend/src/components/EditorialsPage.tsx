@@ -223,7 +223,7 @@ export default function EditorialsPage({ onSelectArticle }: EditorialsPageProps)
                   className="bg-white dark:bg-zinc-950 rounded-2xl border border-zinc-200 dark:border-zinc-850 shadow-xs hover:shadow-md transition-all overflow-hidden flex flex-col justify-between"
                 >
                   {(ed.imageUrl || ed.image_url) && (
-                    <div className="w-full h-48 sm:h-64 overflow-hidden bg-zinc-100 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-850">
+                    <div className="relative aspect-[16/9] w-full overflow-hidden bg-zinc-100 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-850">
                       <img 
                         src={ed.imageUrl || ed.image_url} 
                         alt={ed.headline}
