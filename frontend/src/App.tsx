@@ -271,7 +271,37 @@ export default function App() {
     fetchAlerts();
     fetchLatestEditorial();
     fetchClinicalInsights();
+    checkInitialArticle();
   }, []);
+
+  const checkInitialArticle = async () => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const articleId = searchParams.get('article');
+    if (!articleId) return;
+
+    try {
+      // Try articles first
+      let { data, error } = await supabase.from('articles').select('*').eq('id', articleId).maybeSingle();
+      if (!data) {
+        // Try editorials
+        const edResp = await supabase.from('editorials').select('*').eq('id', articleId).maybeSingle();
+        data = edResp.data;
+      }
+      if (!data) {
+        // Try clinical insights
+        const ciResp = await supabase.from('clinical_insights').select('*').eq('id', articleId).maybeSingle();
+        data = ciResp.data;
+      }
+
+      if (data) {
+        // Need to clean up URL so it doesn't stay there if user closes the article
+        window.history.replaceState({}, document.title, window.location.pathname);
+        setSelectedArticle(mapArticleFromDB(data));
+      }
+    } catch (err) {
+      console.error("Failed to load initial article:", err);
+    }
+  };
 
   const fetchArticles = async () => {
     try {
