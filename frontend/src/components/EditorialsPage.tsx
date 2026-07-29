@@ -85,37 +85,25 @@ export default function EditorialsPage({ onSelectArticle }: EditorialsPageProps)
 
   const handleShare = async (article: any, e: React.MouseEvent) => {
     e.stopPropagation();
-    const shareText = `${article.headline}\n\n${article.summary30s}\n\nRead more at: ${window.location.href}`;
     
+    // Construct dynamic share URL targeting the backend OG generator
+    const origin = window.location.origin.includes('localhost') ? 'https://healicwire.in' : window.location.origin;
+    const shareUrl = `${origin}/api/share/article/${article.id}`;
+    
+    // Only pass the URL and Title, allowing WhatsApp to natively generate a Link Preview
     try {
       if (navigator.share) {
-        const shareData: ShareData = {
-          text: shareText,
-        };
-
-        if ((article.imageUrl || article.image_url) && navigator.canShare) {
-          try {
-            const response = await fetch(article.imageUrl || article.image_url);
-            const blob = await response.blob();
-            const mimeType = blob.type || 'image/jpeg';
-            const extension = mimeType.split('/')[1] || 'jpg';
-            const file = new File([blob], `article-image.${extension}`, { type: mimeType });
-            if (navigator.canShare({ files: [file], text: shareText })) {
-              shareData.files = [file];
-            }
-          } catch (imgErr) {
-            console.warn("Could not attach image to share data", imgErr);
-          }
-        }
-        await navigator.share(shareData);
+        await navigator.share({
+          url: shareUrl
+        });
       } else {
-        await navigator.clipboard.writeText(`${shareText}\n\nRead more at: ${window.location.href}`);
-        alert("Link and content copied to clipboard!");
+        await navigator.clipboard.writeText(`${article.headline}\n\n${shareUrl}`);
+        alert("Link copied to clipboard!");
       }
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
-        navigator.clipboard.writeText(`${shareText}\n\nRead more at: ${window.location.href}`);
-        alert("Link and content copied to clipboard!");
+        navigator.clipboard.writeText(`${article.headline}\n\n${shareUrl}`);
+        alert("Link copied to clipboard!");
       }
     }
   };

@@ -419,6 +419,68 @@ async function startServer() {
     }
   });
 
+  // Dynamic Open Graph generator for social media link previews
+  app.get("/api/share/article/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Try to find the article in articles table first
+      let { data, error } = await supabaseAdmin.from('articles').select('*').eq('id', id).maybeSingle();
+      
+      // If not found, try editorials
+      if (!data) {
+        const resp = await supabaseAdmin.from('editorials').select('*').eq('id', id).maybeSingle();
+        data = resp.data;
+      }
+      
+      // If not found, try clinical insights
+      if (!data) {
+        const resp = await supabaseAdmin.from('clinical_insights').select('*').eq('id', id).maybeSingle();
+        data = resp.data;
+      }
+
+      const redirectUrl = req.headers.host?.includes('localhost') 
+        ? \`http://\${req.headers.host}/editorials\`
+        : "https://healicwire.in/editorials";
+
+      if (error || !data) {
+        return res.redirect(redirectUrl);
+      }
+
+      const article = mapArticleFromDb(data);
+      const title = article.headline ? article.headline.replace(/"/g, '&quot;') : "HealicWire";
+      const description = article.summary30s ? article.summary30s.replace(/"/g, '&quot;') : "Global Healthcare News";
+      const image = article.imageUrl || "https://storage.googleapis.com/healicwire-assets/healicwire-official-logo.png";
+      
+      const html = \`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>\${title}</title>
+  <meta property="og:title" content="\${title}">
+  <meta property="og:description" content="\${description}">
+  <meta property="og:image" content="\${image}">
+  <meta property="og:url" content="\${redirectUrl}">
+  <meta property="og:type" content="article">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="\${title}">
+  <meta name="twitter:description" content="\${description}">
+  <meta name="twitter:image" content="\${image}">
+  <meta http-equiv="refresh" content="0; url=\${redirectUrl}">
+</head>
+<body>
+  <p>Redirecting to article...</p>
+  <script>window.location.replace("\${redirectUrl}");</script>
+</body>
+</html>\`;
+
+      res.send(html);
+    } catch (err: any) {
+      console.error("Error generating share preview:", err);
+      res.redirect("https://healicwire.in/editorials");
+    }
+  });
+
   // Create article (Admin/CMS)
   app.post("/api/admin/articles", async (req, res) => {
     try {
