@@ -1,18 +1,19 @@
-const { createClient } = require('@supabase/supabase-js');
-const dotenv = require('dotenv');
-dotenv.config({ path: '../frontend/.env' });
+import { createClient } from "@supabase/supabase-js";
+import dotenv from "dotenv";
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://jkquqwxaopqszcnlnxti.supabase.co';
-const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImprcXVxd3hhb3Bxc3pjbmxueHRpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ3ODM0ODIsImV4cCI6MjEwMDM1OTQ4Mn0.oA9oOt7q5gWfGAyMbKublWQsubRbPq4zgF9REnBCLo8';
+dotenv.config();
 
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "";
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-async function main() {
-  const { data, error } = await supabase.from('scientific_events').select('*');
-  if (error) {
-    console.error(error);
-  } else {
-    console.log(JSON.stringify(data, null, 2));
-  }
+async function test() {
+  const { data, error } = await supabaseAdmin
+    .from('repository')
+    .select('*')
+    .order('created_at', { ascending: false });
+  console.log("Error:", error);
+  console.log("Data:", JSON.stringify(data, null, 2));
 }
-main();
+
+test();

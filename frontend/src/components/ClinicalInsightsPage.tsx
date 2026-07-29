@@ -155,15 +155,31 @@ export default function ClinicalInsightsPage({ onSelectArticle }: ClinicalInsigh
 
   const handleShare = async (article: any, e: React.MouseEvent) => {
     e.stopPropagation();
-    const authorName = article.author_name || article.sourceName || "HealicWire Expert";
-    const shareText = `${article.headline}\n\n${article.summary30s}\n\nAuthor: ${authorName}`;
+    const shareText = `${article.headline}\n\n${article.summary30s}`;
+    
     try {
       if (navigator.share) {
-        await navigator.share({
+        const shareData: ShareData = {
           title: article.headline,
           text: shareText,
           url: window.location.href,
-        });
+        };
+
+        if ((article.imageUrl || article.image_url) && navigator.canShare) {
+          try {
+            const response = await fetch(article.imageUrl || article.image_url);
+            const blob = await response.blob();
+            const mimeType = blob.type || 'image/jpeg';
+            const extension = mimeType.split('/')[1] || 'jpg';
+            const file = new File([blob], `article-image.${extension}`, { type: mimeType });
+            if (navigator.canShare({ files: [file] })) {
+              shareData.files = [file];
+            }
+          } catch (imgErr) {
+            console.warn("Could not attach image to share data", imgErr);
+          }
+        }
+        await navigator.share(shareData);
       } else {
         await navigator.clipboard.writeText(`${shareText}\n\nRead more at: ${window.location.href}`);
         alert("Link and content copied to clipboard!");

@@ -231,15 +231,7 @@ export default function ArticleDetail({
   };
 
   const handleShare = async () => {
-    const isEditorialOrInsight = article.category === "Editorial" || article.category === "Clinical Insights" || (article as any).isEditorial;
-    
-    let shareText = "";
-    if (isEditorialOrInsight) {
-      const authorName = (article as any).author_name || article.sourceName || "HealicWire Expert";
-      shareText = `${article.headline}\n\n${article.summary30s}\n\nAuthor: ${authorName}`;
-    } else {
-      shareText = `${article.headline}\n\n${article.summary30s}`;
-    }
+    const shareText = `${article.headline}\n\n${article.summary30s}`;
 
     try {
       if (navigator.share) {
@@ -249,13 +241,10 @@ export default function ArticleDetail({
           url: window.location.href,
         };
 
-        // If not an editorial/insight and we have an image, try to attach it if the browser supports sharing files
-        if (!isEditorialOrInsight && article.imageUrl && navigator.canShare) {
+        if ((article.imageUrl || (article as any).image_url) && navigator.canShare) {
           try {
-            // We fetch the image. If it fails due to CORS, we just catch and ignore.
-            const response = await fetch(article.imageUrl);
+            const response = await fetch(article.imageUrl || (article as any).image_url);
             const blob = await response.blob();
-            // Try to deduce extension, fallback to jpg
             const mimeType = blob.type || 'image/jpeg';
             const extension = mimeType.split('/')[1] || 'jpg';
             const file = new File([blob], `article-image.${extension}`, { type: mimeType });

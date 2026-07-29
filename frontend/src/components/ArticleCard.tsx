@@ -54,15 +54,7 @@ export default function ArticleCard({
 
   const handleShare = async (article: Article, e: React.MouseEvent) => {
     e.stopPropagation();
-    const isEditorialOrInsight = article.category === "Editorial" || article.category === "Clinical Insights" || (article as any).isEditorial;
-    
-    let shareText = "";
-    if (isEditorialOrInsight) {
-      const authorName = (article as any).author_name || article.sourceName || "HealicWire Expert";
-      shareText = `${article.headline}\n\n${article.summary30s}\n\nAuthor: ${authorName}`;
-    } else {
-      shareText = `${article.headline}\n\n${article.summary30s}`;
-    }
+    const shareText = `${article.headline}\n\n${article.summary30s}`;
 
     try {
       if (navigator.share) {
@@ -72,9 +64,9 @@ export default function ArticleCard({
           url: window.location.href,
         };
 
-        if (!isEditorialOrInsight && article.imageUrl && navigator.canShare) {
+        if ((article.imageUrl || (article as any).image_url) && navigator.canShare) {
           try {
-            const response = await fetch(article.imageUrl);
+            const response = await fetch(article.imageUrl || (article as any).image_url);
             const blob = await response.blob();
             const mimeType = blob.type || 'image/jpeg';
             const extension = mimeType.split('/')[1] || 'jpg';
