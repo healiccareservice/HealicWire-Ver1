@@ -67,14 +67,10 @@ export default function ArticleCard({
         });
       } else {
         await navigator.clipboard.writeText(`${article.headline}\n\n${shareUrl}`);
-        setShareText("Copied to Clipboard!");
-        setTimeout(() => setShareText("Share Article"), 2000);
       }
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
         navigator.clipboard.writeText(`${article.headline}\n\n${shareUrl}`);
-        setShareText("Copied to Clipboard!");
-        setTimeout(() => setShareText("Share Article"), 2000);
       }
     }
   };
