@@ -222,6 +222,15 @@ export default function EditorialsPage({ onSelectArticle }: EditorialsPageProps)
                 <article
                   className="bg-white dark:bg-zinc-950 rounded-2xl border border-zinc-200 dark:border-zinc-850 shadow-xs hover:shadow-md transition-all overflow-hidden flex flex-col justify-between"
                 >
+                  {(ed.imageUrl || ed.image_url) && (
+                    <div className="w-full h-48 sm:h-64 overflow-hidden bg-zinc-100 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-850">
+                      <img 
+                        src={ed.imageUrl || ed.image_url} 
+                        alt={ed.headline}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  )}
                 {/* Header Row */}
                 <div className="p-6 space-y-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
