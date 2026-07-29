@@ -236,9 +236,7 @@ export default function ArticleDetail({
     try {
       if (navigator.share) {
         const shareData: ShareData = {
-          title: article.headline,
           text: shareText,
-          url: window.location.href,
         };
 
         if ((article.imageUrl || (article as any).image_url) && navigator.canShare) {
@@ -249,7 +247,7 @@ export default function ArticleDetail({
             const extension = mimeType.split('/')[1] || 'jpg';
             const file = new File([blob], `article-image.${extension}`, { type: mimeType });
             
-            if (navigator.canShare({ files: [file] })) {
+            if (navigator.canShare({ files: [file], text: shareText })) {
               shareData.files = [file];
             }
           } catch (imgErr) {

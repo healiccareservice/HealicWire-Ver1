@@ -160,9 +160,7 @@ export default function ClinicalInsightsPage({ onSelectArticle }: ClinicalInsigh
     try {
       if (navigator.share) {
         const shareData: ShareData = {
-          title: article.headline,
           text: shareText,
-          url: window.location.href,
         };
 
         if ((article.imageUrl || article.image_url) && navigator.canShare) {
@@ -172,7 +170,7 @@ export default function ClinicalInsightsPage({ onSelectArticle }: ClinicalInsigh
             const mimeType = blob.type || 'image/jpeg';
             const extension = mimeType.split('/')[1] || 'jpg';
             const file = new File([blob], `article-image.${extension}`, { type: mimeType });
-            if (navigator.canShare({ files: [file] })) {
+            if (navigator.canShare({ files: [file], text: shareText })) {
               shareData.files = [file];
             }
           } catch (imgErr) {
