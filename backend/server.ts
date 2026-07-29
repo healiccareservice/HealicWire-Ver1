@@ -440,7 +440,7 @@ async function startServer() {
       }
 
       const redirectUrl = req.headers.host?.includes('localhost') 
-        ? \`http://\${req.headers.host}/editorials\`
+        ? `http://${req.headers.host}/editorials`
         : "https://healicwire.in/editorials";
 
       if (error || !data) {
@@ -452,27 +452,27 @@ async function startServer() {
       const description = article.summary30s ? article.summary30s.replace(/"/g, '&quot;') : "Global Healthcare News";
       const image = article.imageUrl || "https://storage.googleapis.com/healicwire-assets/healicwire-official-logo.png";
       
-      const html = \`<!DOCTYPE html>
+      const html = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
-  <title>\${title}</title>
-  <meta property="og:title" content="\${title}">
-  <meta property="og:description" content="\${description}">
-  <meta property="og:image" content="\${image}">
-  <meta property="og:url" content="\${redirectUrl}">
+  <title>${title}</title>
+  <meta property="og:title" content="${title}">
+  <meta property="og:description" content="${description}">
+  <meta property="og:image" content="${image}">
+  <meta property="og:url" content="${redirectUrl}">
   <meta property="og:type" content="article">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="\${title}">
-  <meta name="twitter:description" content="\${description}">
-  <meta name="twitter:image" content="\${image}">
-  <meta http-equiv="refresh" content="0; url=\${redirectUrl}">
+  <meta name="twitter:title" content="${title}">
+  <meta name="twitter:description" content="${description}">
+  <meta name="twitter:image" content="${image}">
+  <meta http-equiv="refresh" content="0; url=${redirectUrl}">
 </head>
 <body>
   <p>Redirecting to article...</p>
-  <script>window.location.replace("\${redirectUrl}");</script>
+  <script>window.location.replace("${redirectUrl}");</script>
 </body>
-</html>\`;
+</html>`;
 
       res.send(html);
     } catch (err: any) {
