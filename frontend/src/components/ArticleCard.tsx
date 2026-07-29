@@ -54,7 +54,7 @@ export default function ArticleCard({
 
   const handleShare = async (article: Article, e: React.MouseEvent) => {
     e.stopPropagation();
-    const shareText = `${article.headline}\n\n${article.summary30s}`;
+    const shareText = `${article.headline}\n\n${article.summary30s}\n\nRead more at: ${window.location.href}`;
 
     try {
       if (navigator.share) {
