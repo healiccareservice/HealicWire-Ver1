@@ -201,16 +201,14 @@ async function startServer() {
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
   const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-  // Auth Middleware for privileged routes
   const requireAuth = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
     const authHeader = req.headers.authorization;
     if (!authHeader) {
-      (req as any).user = { id: "test" };
-      return next();
+      return res.status(401).json({ error: "Missing Authorization header" });
     }
 
     const token = authHeader.replace("Bearer ", "");
-    console.log("Verifying token with Supabase...", token.substring(0, 10) + "...");
+    // JWT logging removed for production security
     const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
 
     if (error || !user) {
@@ -601,22 +599,11 @@ async function startServer() {
     try {
       const user = (req as any).user;
       
-      // Fetch user profile
-      const { data: profile } = await supabaseAdmin.from('user_profiles').select('*').eq('id', user.id).maybeSingle();
-      
-      let query = supabaseAdmin.from('editorials').select('*').order('created_at', { ascending: false });
-      
-      // If not an admin, only show their own articles
-      if (!profile?.permissions?.includes('admin')) {
-         const authorNames = [];
-         if (profile?.name) authorNames.push(profile.name);
-         if (user.email) authorNames.push(user.email);
-         if (authorNames.length > 0) {
-           query = query.in('author_name', authorNames);
-         }
-      }
-      
-      const { data, error } = await query;
+      const { data, error } = await supabaseAdmin
+        .from('editorials')
+        .select('*')
+        .order('created_at', { ascending: false });
+        
       if (error) throw error;
       res.json((data || []).map(mapArticleFromDb));
     } catch (err: any) {
@@ -711,29 +698,47 @@ async function startServer() {
         ${criteria ? `\n        Follow these specific criteria and guidelines for the article:\n        ${criteria}\n` : ''}
         The editorial should be evidence-based, referencing clinical guidelines, recent trials, and practical implications for physicians.
         
-        Return a JSON object with the following fields:
+        Return a RAW JSON object WITHOUT markdown blocks, conforming exactly to this structure:
         {
           "headline": "A compelling, professional headline",
           "subhead": "A brief subheadline summarizing the main point",
           "category": "${category || 'Clinical Practice'}",
           "specialties": ["Specialty 1", "Specialty 2"],
           "region": "${region || 'Global'}",
-          "readingTimeMinutes": 6,
-          "summary30s": "A 1-paragraph executive summary (approx 50 words) for quick scanning.",
-          "bodyAnalysis": "The full detailed editorial text (approx 1300 words). Use markdown for formatting, including ## headings for sections, bullet points, and paragraphs.",
-          "clinicalImpactScore": 8,
+          "reading_time_minutes": 6,
+          "summary_30s": "A 1-paragraph executive summary (approx 50 words) for quick scanning.",
+          "body_analysis": "The full detailed editorial text (approx 1300 words). Use markdown for formatting, including ## headings for sections, bullet points, and paragraphs.",
+          "clinical_impact_score": 8,
           "sourceName": "HealicWire Editorial Board"
         }
       `;
 
       const result = await getGeminiClient().models.generateContent({
         model: "gemini-3.6-flash",
-        contents: prompt
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+          temperature: 0.7
+        }
       });
 
-      const text = result.text || "{}";
-      const cleanJson = text.replace(/```json/g, "").replace(/```/g, "").trim();
-      const article = JSON.parse(cleanJson);
+      let text = result.text || "{}";
+      
+      let article;
+      try {
+        text = text.replace(/\\(?!["\\/bfnrt])/g, "\\\\");
+        text = text.replace(/[\x00-\x1F\x7F]/g, "");
+        article = JSON.parse(text);
+      } catch (parseError: any) {
+        console.error("JSON Parse Error:", parseError);
+        return res.status(500).json({ error: "Failed to parse AI response", details: parseError.message });
+      }
+      
+      // Map to frontend expected names
+      article.readingTimeMinutes = article.reading_time_minutes;
+      article.summary30s = article.summary_30s;
+      article.bodyAnalysis = article.body_analysis;
+      article.clinicalImpactScore = article.clinical_impact_score;
       
       // Fetch Wiki image
       let finalImageUrl = "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=800&q=80";
@@ -762,12 +767,16 @@ async function startServer() {
       article.imageUrl = finalImageUrl;
       article.imageCredit = finalImageCredit;
 
-      res.json({ success: true, article });
+      // Ensure id is returned so frontend doesn't ignore it!
+      article.id = "ed-temp-" + Date.now();
+
+      res.json(article);
     } catch (err: any) {
       console.error(err);
       res.status(500).json({ error: err.message });
     }
   });
+
 
   // ==========================================
   // CLINICAL INSIGHTS (Admin/CMS)
@@ -781,7 +790,9 @@ async function startServer() {
       
       let query = supabaseAdmin.from('clinical_insights').select('*').order('created_at', { ascending: false });
       
-      if (!profile?.permissions?.includes('admin') && !profile?.permissions?.includes('super_admin')) {
+      const hasAdmin = profile?.permissions?.some((p: string) => p.toLowerCase().includes('admin') || p.toLowerCase().includes('control panel'));
+      
+      if (!hasAdmin) {
          const authorNames = [];
          if (profile?.name) authorNames.push(profile.name);
          if (user.email) authorNames.push(user.email);
@@ -983,6 +994,37 @@ async function startServer() {
       res.status(500).json({ error: err.message || "Failed to fetch repository" });
     }
   });
+  // Get public advertisements
+  app.get("/api/advertisements", async (req, res) => {
+    try {
+      const { data, error } = await supabaseAdmin
+        .from("advertisements")
+        .select("*")
+        .eq("status", "active")
+        .order("display_order", { ascending: true });
+
+      if (error) {
+        throw error;
+      }
+
+      res.json(data || []);
+    } catch (err: any) {
+      console.error("Error fetching advertisements:", err);
+      res.status(500).json({ error: err.message || "Failed to fetch advertisements" });
+    }
+  });
+
+  // Get public slider settings
+  app.get("/api/slider-settings", (req, res) => {
+    try {
+      const data = fs.readFileSync(SLIDER_SETTINGS_FILE, "utf-8");
+      res.json(JSON.parse(data));
+    } catch (e) {
+      console.error("Failed to read slider settings", e);
+      res.json({ maxItems: 5, selectedIds: [] });
+    }
+  });
+
   // Add scientific event
   app.post("/api/scientific-events", requireAuth, async (req, res) => {
     try {
@@ -1672,11 +1714,11 @@ async function startServer() {
   });
 
   // Get advertisements
-  app.get("/api/admin/repository", async (req, res) => {
+  app.get("/api/admin/advertisements", async (req, res) => {
     console.log("GET /api/admin/advertisements called!");
     try {
       const { data, error } = await supabaseAdmin
-        .from('repository')
+        .from('advertisements')
         .select('*')
         .order('created_at', { ascending: false });
 
@@ -1685,16 +1727,16 @@ async function startServer() {
         throw error;
       }
       
-      console.log(`Fetched ${data?.length} ads from repository`);
+      console.log(`Fetched ${data?.length} ads from advertisements table`);
 
       const mappedData = (data || []).map((item: any) => ({
         id: item.id,
         title: item.title,
-        logoUrl: item.logo,
-        name: item.product_name,
-        details: item.details,
-        promoImage: item.promotion_image,
-        targetPage: item.category,
+        subtitle: item.subtitle,
+        category: item.category,
+        imageUrl: item.image_url,
+        status: item.status,
+        linkUrl: item.link_url,
         createdAt: item.created_at
       }));
 
@@ -1706,19 +1748,19 @@ async function startServer() {
   });
 
   // Add advertisement
-  app.post("/api/admin/repository", async (req, res) => {
+  app.post("/api/admin/advertisements", async (req, res) => {
     try {
       const payload = {
         title: req.body.title,
-        logo: req.body.logoUrl,
-        product_name: req.body.name,
-        details: req.body.details,
-        promotion_image: req.body.promoImage,
-        category: req.body.targetPage
+        subtitle: req.body.subtitle || req.body.details || '',
+        image_url: req.body.imageUrl || req.body.promoImage || '',
+        category: req.body.category || req.body.targetPage || 'Advertisement',
+        link_url: req.body.linkUrl || '',
+        status: req.body.status || 'active'
       };
       
       const { data, error } = await supabaseAdmin
-        .from('repository')
+        .from('advertisements')
         .insert([payload])
         .select();
 
@@ -1730,11 +1772,11 @@ async function startServer() {
       res.status(201).json({
         id: item.id,
         title: item.title,
-        logoUrl: item.logo,
-        name: item.product_name,
-        details: item.details,
-        promoImage: item.promotion_image,
-        targetPage: item.category,
+        subtitle: item.subtitle,
+        category: item.category,
+        imageUrl: item.image_url,
+        status: item.status,
+        linkUrl: item.link_url,
         createdAt: item.created_at
       });
     } catch (err: any) {
@@ -1744,20 +1786,23 @@ async function startServer() {
   });
 
   // Update advertisement
-  app.put("/api/admin/repository/:id", async (req, res) => {
+  app.put("/api/admin/advertisements/:id", async (req, res) => {
     try {
       const { id } = req.params;
       const payload = {
         title: req.body.title,
-        logo: req.body.logoUrl,
-        product_name: req.body.name,
-        details: req.body.details,
-        promotion_image: req.body.promoImage,
-        category: req.body.targetPage
+        subtitle: req.body.subtitle || req.body.details,
+        image_url: req.body.imageUrl || req.body.promoImage,
+        category: req.body.category || req.body.targetPage,
+        link_url: req.body.linkUrl,
+        status: req.body.status
       };
       
+      // Remove undefined values
+      Object.keys(payload).forEach(key => (payload as any)[key] === undefined && delete (payload as any)[key]);
+      
       const { data, error } = await supabaseAdmin
-        .from('repository')
+        .from('advertisements')
         .update(payload)
         .eq('id', id)
         .select();
@@ -1766,15 +1811,19 @@ async function startServer() {
         throw error;
       }
       
+      if (!data || data.length === 0) {
+        return res.status(404).json({ error: "Advertisement not found" });
+      }
+
       const item = data[0];
-      res.status(200).json({
+      res.json({
         id: item.id,
         title: item.title,
-        logoUrl: item.logo,
-        name: item.product_name,
-        details: item.details,
-        promoImage: item.promotion_image,
-        targetPage: item.category,
+        subtitle: item.subtitle,
+        category: item.category,
+        imageUrl: item.image_url,
+        status: item.status,
+        linkUrl: item.link_url,
         createdAt: item.created_at
       });
     } catch (err: any) {
@@ -1784,17 +1833,18 @@ async function startServer() {
   });
 
   // Delete advertisement
-  app.delete("/api/admin/repository/:id", async (req, res) => {
+  app.delete("/api/admin/advertisements/:id", async (req, res) => {
     try {
       const { id } = req.params;
       const { error } = await supabaseAdmin
-        .from('repository')
+        .from('advertisements')
         .delete()
         .eq('id', id);
 
       if (error) {
         throw error;
       }
+      
       res.json({ success: true });
     } catch (err: any) {
       console.error(err);
@@ -1871,6 +1921,72 @@ async function startServer() {
       const { data, error } = await supabaseAdmin.from('correction_reports').update({ status: req.body.status }).eq('id', id).select();
       if (error) throw error;
       if (!data || data.length === 0) return res.status(404).json({ error: "Correction report not found" });
+      res.json(data[0]);
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Get generated specialty news from all tables
+  app.get("/api/admin/generated-specialty-news", async (req, res) => {
+    try {
+      const results: Record<string, any[]> = {};
+      
+      const tables = [
+        { label: "Treatment Update", table: "treatment_update" },
+        { label: "Scientific Events", table: "scientific_events" },
+        { label: "Pharma and Drugs", table: "drugs" },
+        { label: "Hospital Intelligence", table: "hospital_alerts" },
+        { label: "Current Guidelines", table: "current_guidelines" },
+        { label: "Health Care Providers", table: "providers" }
+      ];
+
+      for (const section of tables) {
+        const { data, error } = await supabaseAdmin
+          .from(section.table)
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(20);
+          
+        if (error) {
+          console.error(`Error fetching from ${section.table}:`, error);
+          results[section.label] = [];
+        } else {
+          results[section.label] = data || [];
+        }
+      }
+
+      res.json(results);
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Update a generated specialty news article
+  app.put("/api/admin/generated-specialty-news/:table/:id", async (req, res) => {
+    try {
+      const { table, id } = req.params;
+      const updateData = { ...req.body };
+      
+      const allowedTables = ['treatment_update', 'scientific_events', 'drugs', 'hospital_alerts', 'current_guidelines', 'providers'];
+      if (!allowedTables.includes(table)) {
+        return res.status(400).json({ error: "Invalid table name" });
+      }
+
+      // Remove immutable fields to prevent errors
+      delete updateData.id;
+      delete updateData.created_at;
+      delete updateData.updated_at;
+
+      const { data, error } = await supabaseAdmin
+        .from(table)
+        .update(updateData)
+        .eq('id', id)
+        .select();
+
+      if (error) throw error;
       res.json(data[0]);
     } catch (err: any) {
       console.error(err);
@@ -2319,52 +2435,103 @@ async function startServer() {
       res.status(500).json({ error: err.message });
     }
   });
-
-  // Submit Editorial
-  app.post("/api/admin/editorials", async (req, res) => {
+  // Get all user profiles
+  app.get("/api/admin/user-profiles", async (req, res) => {
     try {
-      const payload = {
-        id: "ed-" + Date.now(),
-        slug: req.body.headline.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""),
-        headline: req.body.headline,
-        subhead: req.body.subhead,
-        category: req.body.category || "Editorial",
-        specialties: req.body.specialties || [],
-        region: req.body.region || "Global",
-        image_url: req.body.imageUrl || "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=800&q=80",
-        image_credit: req.body.imageCredit || "Editorial Photo",
-        published_at: req.body.status === 'published' ? new Date().toISOString() : null,
-        status: req.body.status || "draft",
-        author_name: "Dr. K. Narayana, MD, DM",
-        reading_time_minutes: req.body.readingTimeMinutes || 5,
-        summary_30s: req.body.summary30s,
-        body_analysis: req.body.bodyAnalysis,
-        clinical_impact_score: req.body.clinicalImpactScore || 8,
-        created_at: new Date().toISOString()
-      };
-      
-      const { data, error } = await supabaseAdmin.from('editorials').insert([payload]).select();
-      if (error) {
-        // Fallback: If editorials table doesn't exist, try saving to articles with category Editorial
-        if (error.code === '42P01' || error.message.includes('does not exist')) {
-            console.log("Editorials table missing, falling back to articles table");
-            const articlePayload = {
-              ...payload,
-              source_name: "HealicWire Editorial Board",
-              source_url: "#",
-              evidence_level: "Editorial",
-              is_ai_assisted: true
-            };
-            const { data: artData, error: artError } = await supabaseAdmin.from('articles').insert([articlePayload]).select();
-            if (artError) throw artError;
-            return res.status(201).json(artData[0]);
-        }
-        throw error;
-      }
-      res.status(201).json(data[0]);
+      const { data, error } = await supabaseAdmin
+        .from('user_profiles')
+        .select('*');
+      if (error) throw error;
+      res.json(data);
     } catch (err: any) {
       console.error(err);
       res.status(500).json({ error: err.message });
+    }
+  });
+
+
+
+  // FactCheck AI Evidence Analyzer Streaming Endpoint
+  app.post("/api/factcheck", requireAuth, async (req, res) => {
+    const { claim } = req.body;
+    if (!claim) {
+      return res.status(400).json({ error: "Missing claim" });
+    }
+
+    try {
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+
+      const ai = getGeminiClient();
+      
+      const prompt = `
+You are FactCheck, an AI Evidence Analyzer specialized in Evidence-Based Medicine (EBM).
+Analyze the following healthcare claim, question, or article:
+"${claim}"
+
+Workflow to follow:
+Step 1: Understand the Input - Extract all important scientific claims.
+Step 2: Search Trusted Evidence Sources - Base your analysis ON HIGH-QUALITY MEDICAL LITERATURE (e.g., PubMed, Cochrane, WHO, CDC, NEJM, JAMA, Lancet). Do not rely on blogs.
+Step 3: Classify Evidence - Use the Hierarchy of Scientific Evidence (Level 1 to 10).
+Step 4: Evaluate Evidence - Analyze strength, study quality, limitations, conflicting evidence.
+Step 5: Generate an Evidence Report.
+
+OUTPUT EXACTLY IN THE FOLLOWING MARKDOWN STRUCTURE:
+
+### 🧠 Evidence Summary
+(100-200 words describing what current evidence suggests)
+
+### 📊 Scientific Verdict
+(Choose ONE: ✅ Strongly Supported | ✅ Supported | ⚠️ Partially Supported | ❓ Inconclusive | ❌ Contradicted by Current Evidence | 🚫 No Reliable Scientific Evidence)
+
+### 📈 Evidence Strength
+(Choose ONE: 🟢 Very Strong | 🟢 Strong | 🟡 Moderate | 🟠 Limited | 🔴 Weak | ⚫ No Reliable Evidence)
+
+### 🏆 Highest Level of Evidence Found
+(e.g., **Highest-quality evidence identified:** Systematic Review & Meta-analysis of RCTs (★★★★★))
+
+### 📚 Supporting Studies
+(List 1-3 major studies with **Title**, **Journal**, **Year**, **Study Type**, **Sample Size**, **Main Finding**, **Key Limitation**)
+
+### 📋 Clinical Guidelines
+(Summarize recommendations from WHO, NICE, CDC, etc. if applicable, or state none)
+
+### ⚠️ Limitations
+(Clearly explain limitations of the evidence)
+
+### 💡 Key Takeaways
+(3-5 concise evidence-based conclusions as bullet points)
+
+Important Guardrails:
+- Never fabricate studies.
+- Distinguish between evidence and expert opinion.
+- Explain association vs causation if relevant.
+- DO NOT wrap the entire response in a markdown code block (no \`\`\`markdown). Just output the raw text.
+      `;
+
+      const responseStream = await ai.models.generateContentStream({
+        model: "gemini-3.6-flash",
+        contents: prompt,
+        config: {
+          temperature: 0.2
+        }
+      });
+
+      for await (const chunk of responseStream) {
+        const text = chunk.text;
+        if (text) {
+          // SSE format requires data: prefix and double newline
+          res.write(`data: ${JSON.stringify({ text })}\n\n`);
+        }
+      }
+      
+      res.write('data: [DONE]\n\n');
+      res.end();
+    } catch (err: any) {
+      console.error("FactCheck stream error:", err);
+      res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
+      res.end();
     }
   });
 

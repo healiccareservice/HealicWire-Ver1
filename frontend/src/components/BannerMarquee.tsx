@@ -16,8 +16,8 @@ export default function BannerMarquee() {
 
   React.useEffect(() => {
     Promise.all([
-      fetch('/api/admin/advertisements').then(res => res.json()),
-      fetch('/api/admin/slider-settings').then(res => res.json())
+      fetch('/api/advertisements').then(res => res.json()),
+      fetch('/api/slider-settings').then(res => res.json())
     ])
     .then(([repoData, settingsData]) => {
       if (Array.isArray(repoData)) {

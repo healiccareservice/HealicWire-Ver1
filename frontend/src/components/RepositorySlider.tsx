@@ -12,8 +12,8 @@ export default function RepositorySlider() {
     const fetchData = async () => {
       try {
         const [repoRes, settingsRes] = await Promise.all([
-          fetch("/api/admin/advertisements"),
-          fetch("/api/admin/slider-settings")
+          fetch("/api/advertisements"),
+          fetch("/api/slider-settings")
         ]);
         
         const repoData = await repoRes.json();

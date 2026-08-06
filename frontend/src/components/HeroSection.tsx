@@ -86,8 +86,8 @@ export default function HeroSection({
 
     // 2. Fetch Advertisement Slideshow Items
     Promise.all([
-      fetch('/api/admin/advertisements').then(res => res.json()), // Advertisements MS
-      fetch('/api/admin/slider-settings').then(res => res.json())
+      fetch('/api/advertisements').then(res => res.json()), // Advertisements MS
+      fetch('/api/slider-settings').then(res => res.json())
     ])
     .then(([repoData, settingsData]) => {
       if (Array.isArray(repoData)) {
