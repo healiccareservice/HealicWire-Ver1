@@ -217,12 +217,29 @@ export default function ArticleDetail({
       .catch(err => console.error(err));
   };
 
-  const handleShare = () => {
-    navigator.clipboard.writeText(window.location.href);
-    setShareText("Copied Link!");
-    setTimeout(() => {
-      setShareText("Share Article");
-    }, 2000);
+  const handleShare = async () => {
+    const origin = window.location.origin.includes('localhost') ? 'https://healicwire.in' : window.location.origin;
+    const shareUrl = `${origin}/api/share/article/${article.id}`;
+    
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: article.headline,
+          text: article.summary30s.replace(/\*\*/g, "").replace(/^#+\s*/gm, ""),
+          url: shareUrl
+        });
+      } catch (err) {
+        if ((err as Error).name !== 'AbortError') {
+          navigator.clipboard.writeText(`${article.headline}\n\n${shareUrl}`);
+          setShareText("Copied Link!");
+          setTimeout(() => setShareText("Share Article"), 2000);
+        }
+      }
+    } else {
+      navigator.clipboard.writeText(`${article.headline}\n\n${shareUrl}`);
+      setShareText("Copied Link!");
+      setTimeout(() => setShareText("Share Article"), 2000);
+    }
   };
 
   const pStyles = getInteractivePanelStyles(readerTheme);
@@ -304,7 +321,7 @@ export default function ArticleDetail({
               <img src={article.imageUrl} alt={article.headline} referrerPolicy="no-referrer" className="object-cover w-full h-full" />
             </div>
             <p className="text-[10px] font-mono text-zinc-400 text-right pr-2">
-              Credit: {article.imageCredit} ({article.imageType})
+              Credit: {article.imageCredit} {article.imageType ? `(${article.imageType})` : ""}
             </p>
           </div>
 
@@ -388,7 +405,7 @@ export default function ArticleDetail({
                       Table of Contents
                     </h5>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                      {article.bodyAnalysis
+                      {(article.bodyAnalysis || "")
                         .split("\n")
                         .filter(line => line.trim().startsWith("#"))
                         .map((line, sIdx) => {
@@ -433,52 +450,161 @@ export default function ArticleDetail({
             </div>
           </div>
 
-          {/* INTERACTIVE WHY THIS MATTERS TABS */}
-          <div className={pStyles.container}>
-            <div className={pStyles.header}>
-              <div className="flex items-center space-x-2">
-                <Star className="w-4 h-4 text-amber-500" />
-                <h4 className={pStyles.headerTitle}>
-                  Audience-Specific Interpretation — Why This Matters
-                </h4>
+          {/* TREATMENT UPDATE SPECIFIC SECTIONS */}
+          {article.clinicalQuestion && (
+            <div className={`mt-8 ${pStyles.container}`}>
+              <div className={pStyles.header}>
+                <div className="flex items-center space-x-2">
+                  <Activity className="w-4 h-4 text-teal-600" />
+                  <h4 className={pStyles.headerTitle}>Clinical Treatment Update Summary</h4>
+                </div>
+              </div>
+              <div className={`p-5 text-sm leading-relaxed font-sans ${pStyles.textPrimary} space-y-4`}>
+                
+                {article.clinicalQuestion && (
+                  <div className={`p-4 rounded-lg border-l-4 border-teal-500 ${pStyles.innerCard}`}>
+                    <h5 className="font-bold font-mono text-[10px] uppercase text-teal-700 dark:text-teal-400 mb-1">Clinical Question</h5>
+                    <p>{article.clinicalQuestion}</p>
+                  </div>
+                )}
+
+                {article.keyTreatmentUpdate && (
+                  <div className={`p-4 rounded-lg border-l-4 border-amber-500 ${pStyles.innerCard}`}>
+                    <h5 className="font-bold font-mono text-[10px] uppercase text-amber-700 dark:text-amber-400 mb-1">Key Treatment Update</h5>
+                    <p>{article.keyTreatmentUpdate}</p>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {article.studySummary && (
+                    <div className={`p-4 rounded-lg ${pStyles.innerCard}`}>
+                      <h5 className="font-bold font-mono text-[10px] uppercase text-zinc-500 mb-1">Study Summary</h5>
+                      <p className="text-xs">{article.studySummary}</p>
+                    </div>
+                  )}
+                  {article.patientPopulation && (
+                    <div className={`p-4 rounded-lg ${pStyles.innerCard}`}>
+                      <h5 className="font-bold font-mono text-[10px] uppercase text-zinc-500 mb-1">Patient Population</h5>
+                      <p className="text-xs">{article.patientPopulation}</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {article.clinicalImplications && (
+                    <div className={`p-4 rounded-lg ${pStyles.innerCard}`}>
+                      <h5 className="font-bold font-mono text-[10px] uppercase text-zinc-500 mb-1">Clinical Implications</h5>
+                      <p className="text-xs">{article.clinicalImplications}</p>
+                    </div>
+                  )}
+                  {article.limitations && (
+                    <div className={`p-4 rounded-lg ${pStyles.innerCard}`}>
+                      <h5 className="font-bold font-mono text-[10px] uppercase text-zinc-500 mb-1">Limitations</h5>
+                      <p className="text-xs">{article.limitations}</p>
+                    </div>
+                  )}
+                </div>
+
+                {article.bottomLine && (
+                  <div className="p-4 rounded-lg bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-800">
+                    <h5 className="font-bold font-mono text-[10px] uppercase text-teal-700 dark:text-teal-400 mb-1">The Bottom Line</h5>
+                    <div className="font-medium text-teal-900 dark:text-teal-100">
+                      {Array.isArray(article.bottomLine) ? (
+                        <ul className="list-disc pl-4 space-y-1">
+                          {article.bottomLine.map((line: string, i: number) => (
+                            <li key={i}>{line}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p>{article.bottomLine}</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {(article.strengthOfEvidence || article.clinicalSpecialty) && (
+                  <div className="flex flex-wrap gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-800">
+                    {article.strengthOfEvidence && (
+                      <span className="px-2 py-1 bg-zinc-100 dark:bg-zinc-800 rounded text-[10px] font-mono text-zinc-600 dark:text-zinc-400">
+                        Evidence: {article.strengthOfEvidence}
+                      </span>
+                    )}
+                    {article.clinicalSpecialty && (
+                      <span className="px-2 py-1 bg-zinc-100 dark:bg-zinc-800 rounded text-[10px] font-mono text-zinc-600 dark:text-zinc-400">
+                        Specialty: {article.clinicalSpecialty}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {article.officialReferences && (
+                  <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800">
+                    <h5 className="font-bold font-mono text-[10px] uppercase text-zinc-500 mb-2">Official References</h5>
+                    <div className="text-xs text-zinc-600 dark:text-zinc-400 font-mono break-all">
+                      {Array.isArray(article.officialReferences) ? (
+                        <ul className="list-disc pl-4 space-y-1">
+                          {article.officialReferences.map((ref: string, i: number) => (
+                            <li key={i}>{ref}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p>{article.officialReferences}</p>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
+          )}
 
-            {/* Tabs Row */}
-            <div className={`flex border-b overflow-x-auto scrollbar-none ${pStyles.tabsBorder}`}>
-              {[
-                { id: "clinicians", label: "Clinicians", icon: User },
-                { id: "students", label: "Students", icon: GraduationCap },
-                { id: "hospitalAdministrators", label: "Hospital Admins", icon: Building2 },
-                { id: "patients", label: "Patients", icon: HelpCircle },
-                { id: "researchers", label: "Researchers", icon: FileSpreadsheet }
-              ].map(tab => {
-                const Icon = tab.icon;
-                const isActive = activeAudience === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveAudience(tab.id as any)}
-                    className={`flex items-center space-x-1 px-4 py-3 border-b-2 font-mono text-[10.5px] font-bold uppercase whitespace-nowrap transition-all ${
-                      isActive
-                        ? pStyles.tabActive
-                        : pStyles.tabInactive
-                    }`}
-                  >
-                    <Icon className="w-3.5 h-3.5" />
-                    <span>{tab.label}</span>
-                  </button>
-                );
-              })}
-            </div>
+          {/* INTERACTIVE WHY THIS MATTERS TABS */}
+          {article.whyThisMatters && (
+            <div className={pStyles.container}>
+              <div className={pStyles.header}>
+                <div className="flex items-center space-x-2">
+                  <Star className="w-4 h-4 text-amber-500" />
+                  <h4 className={pStyles.headerTitle}>
+                    Audience-Specific Interpretation — Why This Matters
+                  </h4>
+                </div>
+              </div>
 
-            {/* Tab content */}
-            <div className={`p-5 text-xs leading-relaxed font-sans ${pStyles.textPrimary}`}>
-              <p className={`p-4 rounded-lg ${pStyles.innerCard}`}>
-                {article.whyThisMatters[activeAudience]}
-              </p>
+              {/* Tabs Row */}
+              <div className={`flex border-b overflow-x-auto scrollbar-none ${pStyles.tabsBorder}`}>
+                {[
+                  { id: "clinicians", label: "Clinicians", icon: User },
+                  { id: "students", label: "Students", icon: GraduationCap },
+                  { id: "hospitalAdministrators", label: "Hospital Admins", icon: Building2 },
+                  { id: "patients", label: "Patients", icon: HelpCircle },
+                  { id: "researchers", label: "Researchers", icon: FileSpreadsheet }
+                ].map(tab => {
+                  const Icon = tab.icon;
+                  const isActive = activeAudience === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveAudience(tab.id as any)}
+                      className={`flex items-center space-x-1 px-4 py-3 border-b-2 font-mono text-[10.5px] font-bold uppercase whitespace-nowrap transition-all ${
+                        isActive
+                          ? pStyles.tabActive
+                          : pStyles.tabInactive
+                      }`}
+                    >
+                      <Icon className="w-3.5 h-3.5" />
+                      <span>{tab.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Tab content */}
+              <div className={`p-5 text-xs leading-relaxed font-sans ${pStyles.textPrimary}`}>
+                <p className={`p-4 rounded-lg ${pStyles.innerCard}`}>
+                  {article.whyThisMatters[activeAudience]}
+                </p>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* SIDE-BY-SIDE RECOMMENDATION COMPARISON "WHAT CHANGED" */}
           {article.whatChanged && (
@@ -534,35 +660,37 @@ export default function ArticleDetail({
           )}
 
           {/* REFERENCES & ORIGINAL LINK */}
-          <div className={pStyles.container}>
-            <div className={pStyles.header}>
-              <h4 className={pStyles.headerTitle}>
-                Official Citations & External Sources
-              </h4>
-            </div>
-            <div className="p-5 text-xs">
-              <ul className={`space-y-2 mb-4 font-mono ${pStyles.textPrimary}`}>
-                {article.references.map((ref, idx) => (
-                  <li key={idx} className="flex items-start">
-                    <span className="text-teal-600 dark:text-teal-400 mr-2 shrink-0">[{idx + 1}]</span>
-                    <span className="leading-snug">{ref}</span>
-                  </li>
-                ))}
-              </ul>
-              <div className={`border-t pt-3 flex items-center justify-between text-[11px] font-mono ${pStyles.tabsBorder}`}>
-                <span className={pStyles.textPrimary}>Source Organization: <strong className={pStyles.headerTitle}>{article.sourceName}</strong></span>
-                <a
-                  href={article.sourceUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-teal-600 dark:text-teal-400 hover:underline flex items-center space-x-1 font-semibold"
-                >
-                  <span>Read the original report</span>
-                  <ChevronRight className="w-3 h-3" />
-                </a>
+          {article.references && (
+            <div className={pStyles.container}>
+              <div className={pStyles.header}>
+                <h4 className={pStyles.headerTitle}>
+                  Official Citations & External Sources
+                </h4>
+              </div>
+              <div className="p-5 text-xs">
+                <ul className={`space-y-2 mb-4 font-mono ${pStyles.textPrimary}`}>
+                  {article.references.map((ref, idx) => (
+                    <li key={idx} className="flex items-start">
+                      <span className="text-teal-600 dark:text-teal-400 mr-2 shrink-0">[{idx + 1}]</span>
+                      <span className="leading-snug">{ref}</span>
+                    </li>
+                  ))}
+                </ul>
+                <div className={`border-t pt-3 flex items-center justify-between text-[11px] font-mono ${pStyles.tabsBorder}`}>
+                  <span className={pStyles.textPrimary}>Source Organization: <strong className={pStyles.headerTitle}>{article.sourceName}</strong></span>
+                  <a
+                    href={article.sourceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-teal-600 dark:text-teal-400 hover:underline flex items-center space-x-1 font-semibold"
+                  >
+                    <span>Read the original report</span>
+                    <ChevronRight className="w-3 h-3" />
+                  </a>
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* RIGHT COLUMN: AI Credibility panel, Clinical Chat, dynamic exam prep */}

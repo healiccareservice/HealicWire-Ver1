@@ -13,26 +13,26 @@ if (!supabaseUrl || !supabaseServiceKey) {
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 const users = [
-  { name: "Dr. Arjun Sharma", degree: "MBBS, MD (General Medicine), DM (Cardiology)", role: "Consultant Cardiologist", email: "arjunsharma@gmail.com" },
-  { name: "Dr. Priya Nair", degree: "MBBS, MD (General Medicine), DM (Endocrinology)", role: "Consultant Endocrinologist & Diabetologist", email: "priyanair@gmail.com" },
-  { name: "Dr. Rahul Mehta", degree: "MBBS, MD (General Medicine), DM (Neurology)", role: "Consultant Neurologist", email: "rahulmehta@gmail.com" },
-  { name: "Dr. Sneha Iyer", degree: "MBBS, MD (General Medicine), DM (Nephrology)", role: "Consultant Nephrologist", email: "snehaiyer@gmail.com" },
-  { name: "Dr. Vikram Reddy", degree: "MBBS, MD (General Medicine), DM (Gastroenterology)", role: "Consultant Gastroenterologist", email: "vikramreddy@gmail.com" },
-  { name: "Dr. Ananya Banerjee", degree: "MBBS, MD (General Medicine), DM (Medical Oncology)", role: "Consultant Medical Oncologist", email: "ananyabanerjee@gmail.com" },
-  { name: "Dr. Karthik Rao", degree: "MBBS, MD (General Medicine), DM (Clinical Hematology)", role: "Consultant Hematologist", email: "karthikrao@gmail.com" },
-  { name: "Dr. Meera Joshi", degree: "MBBS, MD (General Medicine), DM (Clinical Immunology & Rheumatology)", role: "Consultant Rheumatologist", email: "meerajoshi@gmail.com" },
-  { name: "Dr. Sandeep Kulkarni", degree: "MBBS, MD (General Medicine), DM (Pulmonary, Critical Care & Sleep Medicine)", role: "Consultant Pulmonologist", email: "sandeepkulkarni@gmail.com" },
-  { name: "Dr. Ritu Verma", degree: "MBBS, MD (General Medicine), DM (Medical Genetics)", role: "Consultant Medical Geneticist", email: "rituverma@gmail.com" },
-  { name: "Dr. Nikhil Desai", degree: "MBBS, MS (General Surgery), MCh (Urology)", role: "Consultant Urologist", email: "nikhildesai@gmail.com" },
-  { name: "Dr. Pooja Kapoor", degree: "MBBS, MS (General Surgery), MCh (Neurosurgery)", role: "Consultant Neurosurgeon", email: "poojakapoor@gmail.com" },
-  { name: "Dr. Ajay Menon", degree: "MBBS, MS (General Surgery), MCh (Cardiothoracic & Vascular Surgery)", role: "Consultant Cardiothoracic Surgeon", email: "ajaymenon@gmail.com" },
-  { name: "Dr. Kavita Patil", degree: "MBBS, MS (General Surgery), MCh (Surgical Oncology)", role: "Consultant Surgical Oncologist", email: "kavitapatil@gmail.com" },
-  { name: "Dr. Rohit Chandra", degree: "MBBS, MS (General Surgery), MCh (Plastic & Reconstructive Surgery)", role: "Consultant Plastic & Reconstructive Surgeon", email: "rohitchandra@gmail.com" },
-  { name: "Dr. Neha Gupta", degree: "MBBS, MD (Pediatrics), DM (Pediatric Neurology)", role: "Consultant Pediatric Neurologist", email: "nehagupta@gmail.com" },
-  { name: "Dr. Harish Bhat", degree: "MBBS, MD (General Medicine), DM (Infectious Diseases)", role: "Consultant Infectious Disease Specialist", email: "harishbhat@gmail.com" },
-  { name: "Dr. Shalini Krishnan", degree: "MBBS, MD (General Medicine), DM (Clinical Pharmacology)", role: "Consultant Clinical Pharmacologist", email: "shalinikrishnan@gmail.com" },
-  { name: "Dr. Vivek Agarwal", degree: "MBBS, MD (General Medicine), DM (Critical Care Medicine)", role: "Consultant Intensivist & Critical Care Specialist", email: "vivekagarwal@gmail.com" },
-  { name: "Dr. Aditi Singh", degree: "MBBS, MD (Radiodiagnosis), Fellowship in Interventional Radiology", role: "Consultant Interventional Radiologist", email: "aditisingh@gmail.com" }
+  { name: "Dr. Arjun Sharma", degree: "MBBS, MD (General Medicine), DM (Cardiology)", role: "Consultant Cardiologist", email: "arjunsharma@healicwire.com" },
+  { name: "Dr. Priya Nair", degree: "MBBS, MD (General Medicine), DM (Endocrinology)", role: "Consultant Endocrinologist & Diabetologist", email: "priyanair@healicwire.com" },
+  { name: "Dr. Rahul Mehta", degree: "MBBS, MD (General Medicine), DM (Neurology)", role: "Consultant Neurologist", email: "rahulmehta@healicwire.com" },
+  { name: "Dr. Sneha Iyer", degree: "MBBS, MD (General Medicine), DM (Nephrology)", role: "Consultant Nephrologist", email: "snehaiyer@healicwire.com" },
+  { name: "Dr. Vikram Reddy", degree: "MBBS, MD (General Medicine), DM (Gastroenterology)", role: "Consultant Gastroenterologist", email: "vikramreddy@healicwire.com" },
+  { name: "Dr. Ananya Banerjee", degree: "MBBS, MD (General Medicine), DM (Medical Oncology)", role: "Consultant Medical Oncologist", email: "ananyabanerjee@healicwire.com" },
+  { name: "Dr. Karthik Rao", degree: "MBBS, MD (General Medicine), DM (Clinical Hematology)", role: "Consultant Hematologist", email: "karthikrao@healicwire.com" },
+  { name: "Dr. Meera Joshi", degree: "MBBS, MD (General Medicine), DM (Clinical Immunology & Rheumatology)", role: "Consultant Rheumatologist", email: "meerajoshi@healicwire.com" },
+  { name: "Dr. Sandeep Kulkarni", degree: "MBBS, MD (General Medicine), DM (Pulmonary, Critical Care & Sleep Medicine)", role: "Consultant Pulmonologist", email: "sandeepkulkarni@healicwire.com" },
+  { name: "Dr. Ritu Verma", degree: "MBBS, MD (General Medicine), DM (Medical Genetics)", role: "Consultant Medical Geneticist", email: "rituverma@healicwire.com" },
+  { name: "Dr. Nikhil Desai", degree: "MBBS, MS (General Surgery), MCh (Urology)", role: "Consultant Urologist", email: "nikhildesai@healicwire.com" },
+  { name: "Dr. Pooja Kapoor", degree: "MBBS, MS (General Surgery), MCh (Neurosurgery)", role: "Consultant Neurosurgeon", email: "poojakapoor@healicwire.com" },
+  { name: "Dr. Ajay Menon", degree: "MBBS, MS (General Surgery), MCh (Cardiothoracic & Vascular Surgery)", role: "Consultant Cardiothoracic Surgeon", email: "ajaymenon@healicwire.com" },
+  { name: "Dr. Kavita Patil", degree: "MBBS, MS (General Surgery), MCh (Surgical Oncology)", role: "Consultant Surgical Oncologist", email: "kavitapatil@healicwire.com" },
+  { name: "Dr. Rohit Chandra", degree: "MBBS, MS (General Surgery), MCh (Plastic & Reconstructive Surgery)", role: "Consultant Plastic & Reconstructive Surgeon", email: "rohitchandra@healicwire.com" },
+  { name: "Dr. Neha Gupta", degree: "MBBS, MD (Pediatrics), DM (Pediatric Neurology)", role: "Consultant Pediatric Neurologist", email: "nehagupta@healicwire.com" },
+  { name: "Dr. Harish Bhat", degree: "MBBS, MD (General Medicine), DM (Infectious Diseases)", role: "Consultant Infectious Disease Specialist", email: "harishbhat@healicwire.com" },
+  { name: "Dr. Shalini Krishnan", degree: "MBBS, MD (General Medicine), DM (Clinical Pharmacology)", role: "Consultant Clinical Pharmacologist", email: "shalinikrishnan@healicwire.com" },
+  { name: "Dr. Vivek Agarwal", degree: "MBBS, MD (General Medicine), DM (Critical Care Medicine)", role: "Consultant Intensivist & Critical Care Specialist", email: "vivekagarwal@healicwire.com" },
+  { name: "Dr. Aditi Singh", degree: "MBBS, MD (Radiodiagnosis), Fellowship in Interventional Radiology", role: "Consultant Interventional Radiologist", email: "aditisingh@healicwire.com" }
 ];
 
 async function addConsultant(user: any, index: number) {

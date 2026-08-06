@@ -149,13 +149,13 @@ export default function ScientificEventPage({ slug, onBack }: ScientificEventPag
       {/* HERO SECTION WITH WEBPAGE IMAGE DESIGN & BANNER */}
       <div className="bg-white dark:bg-zinc-950 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-xl overflow-hidden">
         
-        {/* Banner image preview if WebPage Image uploaded */}
+        {/* Layout image preview if WebPage Image uploaded */}
         {event.webpageImage && (
-          <div className="w-full bg-zinc-900 overflow-hidden border-b border-zinc-200 dark:border-zinc-800 max-h-80">
+          <div className="w-full bg-zinc-900 overflow-hidden border-b border-zinc-200 dark:border-zinc-800">
             <img 
               src={event.webpageImage} 
               alt={event.title} 
-              className="w-full h-full object-cover opacity-95" 
+              className="w-full h-auto object-contain opacity-100" 
             />
           </div>
         )}

@@ -437,12 +437,15 @@ async function startServer() {
         data = resp.data;
       }
 
-      const redirectUrl = req.headers.host?.includes('localhost') 
-        ? `http://${req.headers.host}/editorials`
-        : "https://healicwire.in/editorials";
+      const frontendOrigin = req.headers.host?.includes('localhost') 
+        ? "http://localhost:5173"
+        : "https://healicwire.com";
+      
+      const fallbackUrl = `${frontendOrigin}/`;
+      const redirectUrl = `${frontendOrigin}/?article=${id}`;
 
       if (error || !data) {
-        return res.redirect(redirectUrl);
+        return res.redirect(fallbackUrl);
       }
 
       const article = mapArticleFromDb(data);
@@ -475,7 +478,8 @@ async function startServer() {
       res.send(html);
     } catch (err: any) {
       console.error("Error generating share preview:", err);
-      res.redirect("https://healicwire.in/editorials");
+      const fallbackUrl = req.headers.host?.includes('localhost') ? "http://localhost:5173/" : "https://healicwire.com/";
+      res.redirect(fallbackUrl);
     }
   });
 

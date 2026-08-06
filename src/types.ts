@@ -139,6 +139,23 @@ export interface Article {
   learningModule?: LearningModule;
   factCheckClaims?: FactCheckClaim[];
   views: number;
+  
+  // Specific fields for treatment updates
+  clinicalSpecialty?: string;
+  clinicalImpact?: string;
+  clinicalQuestion?: string;
+  studySummary?: string;
+  keyTreatmentUpdate?: string;
+  clinicalImplications?: string;
+  patientPopulation?: string;
+  strengthOfEvidence?: string;
+  limitations?: string;
+  author_name?: string;
+  author_email?: string;
+  author_qualifications?: string;
+  author_title?: string;
+  bottomLine?: string;
+  officialReferences?: string;
 }
 
 export interface LivingGuideline {

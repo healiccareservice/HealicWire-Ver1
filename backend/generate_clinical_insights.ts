@@ -93,6 +93,12 @@ async function run() {
         articleData = await generateMockArticle(author);
     }
     
+    // Assign email if missing
+    if (!articleData.created_by_email) {
+      const baseName = author.name.toLowerCase().replace(/[^a-z0-9]/g, '').replace(/^dr/, '');
+      articleData.created_by_email = `${baseName}@healicwire.com`;
+    }
+
     // Insert into Supabase
     const { data, error } = await supabase.from('clinical_insights').insert(articleData).select();
     if (error) {

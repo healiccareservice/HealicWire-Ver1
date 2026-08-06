@@ -4,9 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx server.ts",
+    "dev": "tsx watch server.ts",
     "build": "esbuild server.ts --bundle --platform=node --format=cjs --packages=external --outfile=dist/server.cjs",
-    "start": "node dist/server.cjs"
+    "start": "node dist/server.cjs",
+    "update-insight-images": "npx tsx scripts/update_insight_images.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

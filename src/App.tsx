@@ -365,12 +365,13 @@ export default function App() {
           <EditorialsPage onSelectArticle={setSelectedArticle} />
         ) : currentTab === "guidelines" ? (
           /* Render Current Guidelines */
-          <LivingGuidelines />
+          <LivingGuidelines onSelectArticle={setSelectedArticle} />
         ) : currentTab === "pharma-drugs" ? (
           /* Render Pharma and Drugs Intelligence */
           <LivingGuidelines 
             title="Pharma & Drugs Intelligence" 
             subtitle="CDSCO drug advisories, FDA safety warnings, bioequivalence parameters, and novel therapeutic molecule approvals." 
+            onSelectArticle={setSelectedArticle}
           />
         ) : currentTab === "alerts" ? (
           /* Render Hospital Alerts */
@@ -380,6 +381,7 @@ export default function App() {
           <LivingGuidelines 
             title="Clinical Treatment Updates" 
             subtitle="Real-time clinical protocols, dosage changes, and therapeutic advancements for evidence-based patient care." 
+            onSelectArticle={setSelectedArticle}
           />
         ) : currentTab === "events" ? (
           /* Render Scientific Events or Specific Event Page */

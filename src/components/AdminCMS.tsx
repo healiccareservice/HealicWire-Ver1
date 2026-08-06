@@ -38,7 +38,8 @@ import {
   Lock,
   Stethoscope,
   Share2,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Users
 } from "lucide-react";
 import { Article, EvidenceLevel, Region } from "../types";
 
@@ -403,8 +404,8 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
 
   const handleCreateScientificEventSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!createEventForm.title.trim() || !createEventForm.description.trim()) {
-      alert("Please provide both Event Title and Event Description.");
+    if (!createEventForm.title.trim() || !createEventForm.organizer.trim() || !createEventForm.description.trim() || !createEventForm.registrationUrl.trim() || !createEventForm.registrationDeadline || !createEventForm.submissionUrl.trim() || !createEventForm.abstractDeadline || !createEventForm.slug.trim()) {
+      alert("Please fill out all required fields marked with * (Title, Organizer, Description, Registration Link/Date, Submission Link/Date, Slug).");
       return;
     }
 
@@ -448,12 +449,13 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
   };
 
   // Generate News Weekly State & Lock Logic
-  const ALL_5_SECTIONS = [
+  const ALL_SECTIONS = [
     { id: "Treatment Update", label: "Treatment Update", icon: Stethoscope, url: "/treatmentupdate" },
     { id: "Scientific Events", label: "Scientific Events", icon: Calendar, url: "/scientificevents" },
     { id: "Pharma and Drugs", label: "Pharma and Drugs", icon: Pill, url: "/pharmadrugs" },
     { id: "Hospital Intelligence", label: "Hospital Intelligence", icon: ShieldAlert, url: "/alerts" },
-    { id: "Current Guidelines", label: "Current Guidelines", icon: BookOpen, url: "/guidelines" }
+    { id: "Current Guidelines", label: "Current Guidelines", icon: BookOpen, url: "/guidelines" },
+    { id: "Health Care Providers", label: "Health Care Providers", icon: Users, url: "/providers" }
   ];
 
   const WEEK_OPTIONS = [
@@ -469,8 +471,10 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
     "Scientific Events",
     "Pharma and Drugs",
     "Hospital Intelligence",
-    "Current Guidelines"
+    "Current Guidelines",
+    "Health Care Providers"
   ]);
+  const [newsCounts, setNewsCounts] = useState<Record<string, number>>({});
   const [selectedWeek, setSelectedWeek] = useState<string>("Week 30, 2026");
   const [generatedWeeksMap, setGeneratedWeeksMap] = useState<{ [weekId: string]: string[] }>({});
   const [generatingWeekly, setGeneratingWeekly] = useState(false);
@@ -495,10 +499,10 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
   };
 
   const toggleSelectAllSections = () => {
-    if (selectedSections.length === ALL_5_SECTIONS.length) {
+    if (selectedSections.length === ALL_SECTIONS.length) {
       setSelectedSections([]);
     } else {
-      setSelectedSections(ALL_5_SECTIONS.map(s => s.id));
+      setSelectedSections(ALL_SECTIONS.map(s => s.id));
     }
   };
 
@@ -524,7 +528,7 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
     fetch("/api/admin/generate-weekly-batch", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ selectedWeek, selectedSections })
+      body: JSON.stringify({ selectedWeek, selectedSections, newsCounts })
     })
       .then(res => res.json())
       .then(data => {
@@ -1030,10 +1034,10 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
             {/* User Profile Badge */}
             <div className="bg-white dark:bg-zinc-950 border border-zinc-200/80 dark:border-zinc-800 rounded-xl p-3.5 shadow-2xs space-y-1.5">
               <div className="font-bold text-xs text-zinc-900 dark:text-white leading-tight">
-                Dr. Narayana K (Admin)
+                {session?.user?.user_metadata?.full_name || "Dr. Narayana K"} (Admin)
               </div>
               <div className="text-[11px] text-zinc-500 dark:text-zinc-400 font-mono">
-                admin@healic.co
+                {session?.user?.email || "admin@healic.co"}
               </div>
               <div className="flex space-x-1.5 pt-1">
                 <span className="px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-mono text-[9px] font-bold">
@@ -1557,12 +1561,12 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
                             onClick={toggleSelectAllSections}
                             className="text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
                           >
-                            {selectedSections.length === ALL_5_SECTIONS.length ? "Deselect All" : "Select All 5 Sections"}
+                            {selectedSections.length === ALL_SECTIONS.length ? "Deselect All" : `Select All ${ALL_SECTIONS.length} Sections`}
                           </button>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                          {ALL_5_SECTIONS.map(sec => {
+                        <div className="flex flex-col space-y-3">
+                          {ALL_SECTIONS.map(sec => {
                             const isSelected = selectedSections.includes(sec.id);
                             const isLockedForWeek = isSectionLockedForWeek(sec.id, selectedWeek);
 
@@ -1599,8 +1603,19 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
                                     )}
                                   </div>
 
-                                  <div className="text-[10.5px] font-mono text-zinc-400">
-                                    Target URL: <span className="text-indigo-600 dark:text-indigo-400 font-bold">{sec.url}</span>
+                                  <div className="text-[10.5px] font-mono text-zinc-400 flex items-center mt-2">
+                                    Target URL: <span className="text-indigo-600 dark:text-indigo-400 font-bold ml-1 mr-1">{sec.url}</span>: No
+                                    <input 
+                                      type="number" 
+                                      min="1" 
+                                      max="20" 
+                                      value={newsCounts[sec.id] || 1}
+                                      onChange={(e) => setNewsCounts(prev => ({ ...prev, [sec.id]: parseInt(e.target.value) || 1 }))}
+                                      onClick={e => e.stopPropagation()} 
+                                      className="w-14 ml-2 px-1.5 py-0.5 rounded border border-zinc-300 dark:border-zinc-700 bg-transparent text-zinc-900 dark:text-white"
+                                      placeholder="#" 
+                                    />
+                                    <span className="ml-2 text-[9px] opacity-70">(number of News to be generated)</span>
                                   </div>
                                 </div>
 
@@ -2210,7 +2225,6 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
                             </label>
                             <input
                               type="text"
-                              required
                               value={createEventForm.title}
                               onChange={e => setCreateEventForm({ ...createEventForm, title: e.target.value })}
                               placeholder="e.g. 42nd National Annual Conference of Cardiology & Precision Medicine 2026"
@@ -2224,7 +2238,6 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
                             </label>
                             <input
                               type="text"
-                              required
                               value={createEventForm.organizer}
                               onChange={e => setCreateEventForm({ ...createEventForm, organizer: e.target.value })}
                               placeholder="e.g. Indian Medical Association / Cardiology Society of India"
@@ -2318,7 +2331,6 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
                               Scientific Event Overview & Key Highlights *
                             </label>
                             <textarea
-                              required
                               rows={4}
                               value={createEventForm.description}
                               onChange={e => setCreateEventForm({ ...createEventForm, description: e.target.value })}
@@ -2357,7 +2369,6 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
                             </label>
                             <input
                               type="text"
-                              required
                               value={createEventForm.registrationUrl}
                               onChange={e => setCreateEventForm({ ...createEventForm, registrationUrl: e.target.value })}
                               placeholder="https://registration-portal.org/event"
@@ -2371,7 +2382,6 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
                             </label>
                             <input
                               type="date"
-                              required
                               value={createEventForm.registrationDeadline}
                               onChange={e => setCreateEventForm({ ...createEventForm, registrationDeadline: e.target.value })}
                               className="w-full px-3.5 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white font-medium"
@@ -2385,7 +2395,6 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
                             </label>
                             <input
                               type="text"
-                              required
                               value={createEventForm.submissionUrl}
                               onChange={e => setCreateEventForm({ ...createEventForm, submissionUrl: e.target.value })}
                               placeholder="https://submissions.org/submit-abstract"
@@ -2399,7 +2408,6 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
                             </label>
                             <input
                               type="date"
-                              required
                               value={createEventForm.abstractDeadline}
                               onChange={e => setCreateEventForm({ ...createEventForm, abstractDeadline: e.target.value })}
                               className="w-full px-3.5 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white font-medium"
@@ -2442,7 +2450,6 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
                               <span className="text-[11px] font-mono text-zinc-400">http://localhost:3001/scientificevents/</span>
                               <input
                                 type="text"
-                                required
                                 value={createEventForm.slug}
                                 onChange={e => setCreateEventForm({ ...createEventForm, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "") })}
                                 placeholder="e.g. cardio-2026"
@@ -3013,7 +3020,14 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
                           </div>
 
                           <div className="pt-3 mt-3 border-t border-zinc-100 dark:border-zinc-900 flex items-center justify-between text-[10.5px] font-mono text-zinc-400">
-                            <span>{new Date(art.publishedAt).toLocaleDateString("en-IN")}</span>
+                            <div className="flex flex-col">
+                              <span>{new Date(art.publishedAt).toLocaleDateString("en-IN")}</span>
+                              {(art.author_name || art.author_email) && (
+                                <span className="mt-0.5 text-zinc-500">
+                                  Pub: {art.author_name || "Unknown"} {art.author_email ? `(${art.author_email})` : ""}
+                                </span>
+                              )}
+                            </div>
                             <span>{art.views || 0} views</span>
                           </div>
                         </div>
@@ -3246,6 +3260,13 @@ export default function AdminCMS({ onClose }: AdminCMSProps) {
                           </div>
                           <h4 className="text-sm font-bold text-zinc-900 dark:text-white">{art.headline}</h4>
                           <p className="text-xs text-zinc-600 dark:text-zinc-400">{art.summary30s}</p>
+                          {(art.author_name || art.author_email) && (
+                            <div className="pt-2 mt-2 border-t border-zinc-100 dark:border-zinc-900/50 flex items-center justify-between text-[10.5px] font-mono text-zinc-500">
+                              <span>
+                                Pub: {art.author_name || "Unknown"} {art.author_email ? `(${art.author_email})` : ""}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       ))
                     )}

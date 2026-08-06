@@ -10,15 +10,19 @@ import { LivingGuideline } from "../types";
 interface LivingGuidelinesProps {
   title?: string;
   subtitle?: string;
+  onSelectArticle?: (article: any) => void;
 }
 
-export default function LivingGuidelines({ title = "Current Guidelines Registry", subtitle = "Real-time registry tracking major clinical, drug, and public health recommendation shifts. Stay ahead of changing therapeutic guidelines." }: LivingGuidelinesProps) {
+export default function LivingGuidelines({ 
+  title = "Current Guidelines Registry", 
+  subtitle = "Real-time registry tracking major clinical, drug, and public health recommendation shifts. Stay ahead of changing therapeutic guidelines.",
+  onSelectArticle
+}: LivingGuidelinesProps) {
   const [guidelines, setGuidelines] = useState<LivingGuideline[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
   const [treatmentUpdates, setTreatmentUpdates] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetch("/api/current-guidelines")
@@ -35,17 +39,26 @@ export default function LivingGuidelines({ title = "Current Guidelines Registry"
         setLoading(false);
       });
 
-    fetch("/api/articles?status=all")
-      .then(res => res.json())
-      .then(data => {
-        const tu = data.filter((a: any) =>
-          a.headline.startsWith("Treatment Update:") ||
-          (a.sourceName === "HealicWire Special Page Engine" && !a.headline.startsWith("Scientific Events:"))
-        );
-        setTreatmentUpdates(tu);
-      })
-      .catch(err => console.error(err));
-  }, []);
+    if (title === "Clinical Treatment Updates") {
+      fetch("/api/treatment_updates")
+        .then(res => res.json())
+        .then(data => {
+          setTreatmentUpdates(data);
+        })
+        .catch(err => console.error(err));
+    } else {
+      fetch("/api/articles?status=all")
+        .then(res => res.json())
+        .then(data => {
+          const tu = data.filter((a: any) =>
+            a.headline?.startsWith("Treatment Update:") ||
+            (a.sourceName === "HealicWire Special Page Engine" && !a.headline?.startsWith("Scientific Events:"))
+          );
+          setTreatmentUpdates(tu);
+        })
+        .catch(err => console.error(err));
+    }
+  }, [title]);
 
   const filtered = guidelines.filter(g =>
     g.condition.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -69,8 +82,9 @@ export default function LivingGuidelines({ title = "Current Guidelines Registry"
         </p>
       </div>
 
-      {/* FEATURED TREATMENT UPDATES CREATED IN CREATE PAGES (ALWAYS ON TOP) */}
-      {treatmentUpdates.length > 0 && (
+
+      {/* FEATURED TREATMENT UPDATES (FOR OTHER TABS) */}
+      {title !== "Current Guidelines Registry" && treatmentUpdates.length > 0 && (
         <div className="mb-8 p-6 rounded-2xl bg-gradient-to-r from-teal-900/10 via-emerald-900/10 to-cyan-900/10 dark:from-teal-950/40 dark:via-emerald-950/40 dark:to-cyan-950/40 border border-teal-200 dark:border-teal-800/60 shadow-xs space-y-4 font-sans">
           <div className="flex items-center justify-between border-b border-teal-200/60 dark:border-teal-800/40 pb-3">
             <div className="flex items-center space-x-2.5">
@@ -90,37 +104,70 @@ export default function LivingGuidelines({ title = "Current Guidelines Registry"
             </span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
             {treatmentUpdates.map(item => (
               <div
                 key={item.id}
-                className="bg-white dark:bg-zinc-950 p-5 rounded-xl border border-teal-200/80 dark:border-teal-800/80 shadow-2xs hover:shadow-md transition-all flex flex-col justify-between"
+                onClick={() => onSelectArticle?.(item)}
+                className="bg-white dark:bg-zinc-950 rounded-xl border border-teal-200/80 dark:border-teal-800/80 shadow-2xs hover:shadow-md transition-all flex flex-col justify-between cursor-pointer overflow-hidden group"
               >
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="px-2.5 py-0.5 rounded text-[9.5px] font-mono font-bold bg-teal-100 dark:bg-teal-950 text-teal-700 dark:text-teal-300 uppercase">
+                {item.imageUrl && (
+                  <div className="h-32 w-full overflow-hidden relative">
+                    <img 
+                      src={item.imageUrl} 
+                      alt={item.headline} 
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+                    <span className="absolute bottom-3 left-3 px-2 py-0.5 rounded text-[9.5px] font-mono font-bold bg-teal-500 text-white uppercase">
                       {item.category || "Treatment Update"}
                     </span>
+                  </div>
+                )}
+                
+                <div className="p-5 flex-1 flex flex-col space-y-3">
+                  {!item.imageUrl && (
+                    <div className="flex items-center justify-between">
+                      <span className="px-2.5 py-0.5 rounded text-[9.5px] font-mono font-bold bg-teal-100 dark:bg-teal-950 text-teal-700 dark:text-teal-300 uppercase">
+                        {item.category || "Treatment Update"}
+                      </span>
+                      <span className="text-[10.5px] font-mono text-zinc-400">
+                        {new Date(item.publishedAt || Date.now()).toLocaleDateString("en-IN")}
+                      </span>
+                    </div>
+                  )}
+
+                  {item.imageUrl && (
                     <span className="text-[10.5px] font-mono text-zinc-400">
                       {new Date(item.publishedAt || Date.now()).toLocaleDateString("en-IN")}
                     </span>
-                  </div>
+                  )}
 
-                  <h3 className="text-sm font-bold text-zinc-900 dark:text-white leading-snug">
+                  <h3 className="text-sm md:text-base font-bold text-zinc-900 dark:text-white leading-snug">
                     {item.headline}
                   </h3>
 
                   <p className="text-xs text-zinc-600 dark:text-zinc-400 line-clamp-2 leading-relaxed">
-                    {item.summary30s || item.bodyAnalysis}
+                    {item.bottomLine 
+                      ? (Array.isArray(item.bottomLine) ? item.bottomLine.join(' ') : item.bottomLine) 
+                      : (item.summary30s || item.bodyAnalysis)}
                   </p>
+                  
+                  {item.clinicalSpecialty && (
+                    <div className="pt-2">
+                       <span className="text-[10px] font-mono bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 px-2 py-1 rounded">
+                         {item.clinicalSpecialty}
+                       </span>
+                    </div>
+                  )}
                 </div>
 
-                <div className="mt-4 pt-3 border-t border-zinc-100 dark:border-zinc-900 flex items-center justify-between text-xs">
-                  <span className="text-[10.5px] font-mono text-teal-700 dark:text-teal-400 font-bold">
-                    ✓ Official Protocol Guideline
+                <div className="px-5 pb-4 pt-3 border-t border-zinc-100 dark:border-zinc-900 flex items-center justify-between text-xs">
+                  <span className="text-[10.5px] font-mono text-teal-700 dark:text-teal-400 font-bold flex items-center">
+                    ✓ Official Protocol
                   </span>
-                  <span className="text-[10.5px] font-mono text-zinc-400">
-                    {item.readingTimeMinutes || 4}m read
+                  <span className="text-[10.5px] font-mono text-teal-600 dark:text-teal-500 font-bold group-hover:underline">
+                    Read Full Analysis &rarr;
                   </span>
                 </div>
               </div>
@@ -129,8 +176,10 @@ export default function LivingGuidelines({ title = "Current Guidelines Registry"
         </div>
       )}
 
-      {/* Search Bar */}
-      <div className="relative mb-6">
+      {title === "Current Guidelines Registry" && (
+        <>
+          {/* Search Bar */}
+          <div className="relative mb-6">
         <input
           type="text"
           placeholder="Filter guidelines by clinical condition (e.g., Diabetes, Hypertension)..."
@@ -182,7 +231,7 @@ export default function LivingGuidelines({ title = "Current Guidelines Registry"
                       </span>
                     </div>
                     <h3 className="text-base font-bold text-zinc-900 dark:text-white">
-                      {g.condition} Treatment Guidelines
+                      {g.title || `${g.condition} Treatment Guidelines`}
                     </h3>
                   </div>
                   <div className="shrink-0 p-1.5 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-850">
@@ -197,6 +246,68 @@ export default function LivingGuidelines({ title = "Current Guidelines Registry"
                 {/* Expanded Details */}
                 {isExpanded && (
                   <div className="px-5 pb-5 border-t border-zinc-100 dark:border-zinc-900 pt-4 space-y-5 text-sm">
+                    
+                    {/* Expanded Header Info */}
+                    <div className="flex flex-wrap gap-2 text-xs font-mono font-medium">
+                      {g.publicationYear && (
+                        <span className="bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 px-2 py-1 rounded">
+                          Published: {g.publicationYear}
+                        </span>
+                      )}
+                      {g.evidenceLevel && (
+                        <span className="bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 px-2 py-1 rounded font-bold flex items-center">
+                          <Sparkles className="w-3 h-3 mr-1" />
+                          {g.evidenceLevel}
+                        </span>
+                      )}
+                      {g.targetAudience && (
+                        <span className="bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 px-2 py-1 rounded">
+                          Audience: {g.targetAudience}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* What's New */}
+                    {g.whatsNew && (
+                      <div className="p-4 rounded-xl bg-gradient-to-r from-teal-50 to-emerald-50 dark:from-teal-950/20 dark:to-emerald-950/20 border border-teal-100 dark:border-teal-900/50">
+                        <div className="flex items-center space-x-1.5 text-teal-800 dark:text-teal-300 font-bold text-xs uppercase tracking-wider mb-2">
+                          <AlertCircle className="w-4 h-4" />
+                          <span>What's New in this Update</span>
+                        </div>
+                        <div className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed font-medium whitespace-pre-wrap">
+                          {g.whatsNew}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Key Clinical Recommendations */}
+                    {g.keyClinicalRecommendations && Object.keys(g.keyClinicalRecommendations).length > 0 && (
+                      <div className="space-y-2">
+                        <div className="flex items-center space-x-1.5 text-zinc-700 dark:text-zinc-300 font-bold text-xs uppercase tracking-wider">
+                          <BookOpen className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                          <span>Key Clinical Recommendations</span>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {Object.entries(g.keyClinicalRecommendations).map(([category, recommendations]: [string, any]) => (
+                            <div key={category} className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-3">
+                              <h5 className="font-bold text-zinc-900 dark:text-zinc-100 text-xs mb-2 border-b border-zinc-100 dark:border-zinc-800 pb-1">
+                                {category}
+                              </h5>
+                              <ul className="space-y-1.5 text-xs text-zinc-600 dark:text-zinc-400">
+                                {Array.isArray(recommendations) ? recommendations.map((rec, i) => (
+                                  <li key={i} className="flex items-start">
+                                    <span className="text-teal-500 mr-1.5 mt-0.5">•</span>
+                                    <span>{rec}</span>
+                                  </li>
+                                )) : (
+                                  <li>{recommendations}</li>
+                                )}
+                              </ul>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     {/* Recommendation Comparison */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {/* Current recommendation */}
@@ -212,12 +323,12 @@ export default function LivingGuidelines({ title = "Current Guidelines Registry"
 
                       {/* Previous recommendation */}
                       {g.previousRecommendation && (
-                        <div className="p-4 rounded-lg bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800">
-                          <div className="flex items-center space-x-1.5 text-zinc-500 dark:text-zinc-400 font-bold text-xs uppercase tracking-wider mb-2">
-                            <span className="w-1.5 h-1.5 rounded-full bg-zinc-400" />
+                        <div className="p-4 rounded-lg bg-red-50/50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/40">
+                          <div className="flex items-center space-x-1.5 text-red-600 dark:text-red-400 font-bold text-sm uppercase tracking-wider mb-2">
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
                             <span>Previous Practice (Changed)</span>
                           </div>
-                          <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed line-through">
+                          <p className="text-sm md:text-base text-red-700/80 dark:text-red-300/80 leading-relaxed line-through">
                             {g.previousRecommendation}
                           </p>
                         </div>
@@ -246,6 +357,26 @@ export default function LivingGuidelines({ title = "Current Guidelines Registry"
                       </p>
                     </div>
 
+                    {/* Clinical Pearls */}
+                    {g.clinicalPearls && g.clinicalPearls.length > 0 && (
+                      <div className="space-y-1.5">
+                        <div className="flex items-center space-x-1.5 text-teal-700 dark:text-teal-400 font-bold text-xs uppercase tracking-wider">
+                          <Sparkles className="w-3.5 h-3.5" />
+                          <span>Clinical Pearls</span>
+                        </div>
+                        <div className="bg-zinc-50 dark:bg-zinc-900/40 p-3 rounded-lg border border-zinc-150 dark:border-zinc-850">
+                          <ul className="space-y-2 text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
+                            {g.clinicalPearls.map((pearl, i) => (
+                              <li key={i} className="flex items-start font-mono">
+                                <span className="text-teal-500 font-bold mr-2">→</span>
+                                <span className="flex-1">{pearl}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    )}
+
                     {/* References */}
                     {g.references && g.references.length > 0 && (
                       <div className="border-t border-zinc-100 dark:border-zinc-900 pt-3">
@@ -268,6 +399,8 @@ export default function LivingGuidelines({ title = "Current Guidelines Registry"
             );
           })}
         </div>
+          )}
+        </>
       )}
     </div>
   );

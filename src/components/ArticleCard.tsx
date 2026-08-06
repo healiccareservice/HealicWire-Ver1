@@ -4,7 +4,7 @@
  */
 
 import React from "react";
-import { Calendar, Clock, Bookmark, Sparkles, Globe } from "lucide-react";
+import { Calendar, Clock, Bookmark, Sparkles, Globe, Share2 } from "lucide-react";
 import { Article, EvidenceLevel, Region } from "../types";
 
 interface ArticleCardProps {
@@ -49,6 +49,28 @@ export default function ArticleCard({
         return "bg-orange-50 text-orange-700 dark:bg-orange-950/20 dark:text-orange-400 border-orange-200/50 dark:border-orange-900";
       default:
         return "bg-zinc-50 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800";
+    }
+  };
+
+  const handleShare = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const origin = window.location.origin.includes('localhost') ? 'https://healicwire.in' : window.location.origin;
+    const shareUrl = `${origin}/api/share/article/${article.id}`;
+    
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: article.headline,
+          text: article.summary30s.replace(/\*\*/g, "").replace(/^#+\s*/gm, ""),
+          url: shareUrl
+        });
+      } else {
+        await navigator.clipboard.writeText(`${article.headline}\n\n${shareUrl}`);
+      }
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') {
+        navigator.clipboard.writeText(`${article.headline}\n\n${shareUrl}`);
+      }
     }
   };
 
@@ -130,13 +152,22 @@ export default function ArticleCard({
           )}
         </div>
 
-        {/* Save Article Button */}
-        <button
-          onClick={(e) => onToggleSave(e, article.id)}
-          className="absolute top-3 right-3 p-1.5 rounded-full bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm text-zinc-600 dark:text-zinc-300 hover:bg-white dark:hover:bg-zinc-900 border border-zinc-200/50 dark:border-zinc-850 shadow-sm z-10 transition-all"
-        >
-          <Bookmark className={`w-3.5 h-3.5 transition-colors ${isSaved ? "fill-amber-500 text-amber-500" : ""}`} />
-        </button>
+        <div className="absolute top-3 right-3 flex flex-col gap-2 z-10">
+          {/* Share Button */}
+          <button
+            onClick={handleShare}
+            className="p-1.5 rounded-full bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm text-zinc-600 dark:text-zinc-300 hover:bg-white dark:hover:bg-zinc-900 border border-zinc-200/50 dark:border-zinc-850 shadow-sm transition-all"
+          >
+            <Share2 className="w-3.5 h-3.5" />
+          </button>
+          {/* Save Article Button */}
+          <button
+            onClick={(e) => onToggleSave(e, article.id)}
+            className="p-1.5 rounded-full bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm text-zinc-600 dark:text-zinc-300 hover:bg-white dark:hover:bg-zinc-900 border border-zinc-200/50 dark:border-zinc-850 shadow-sm transition-all"
+          >
+            <Bookmark className={`w-3.5 h-3.5 transition-colors ${isSaved ? "fill-amber-500 text-amber-500" : ""}`} />
+          </button>
+        </div>
 
         {article.isAiAssisted && (
           <div className="absolute bottom-2 right-2 flex items-center space-x-1 px-2 py-0.5 rounded bg-teal-500/90 text-white font-mono text-[9px] font-bold uppercase tracking-wider">
