@@ -12,7 +12,7 @@ export default function RepositorySlider() {
     const fetchData = async () => {
       try {
         const [repoRes, settingsRes] = await Promise.all([
-          fetch("/api/repository"),
+          fetch("/api/admin/advertisements"),
           fetch("/api/admin/slider-settings")
         ]);
         
@@ -115,16 +115,14 @@ export default function RepositorySlider() {
 
       {/* Main Slide Card Content */}
       <div className="relative w-full min-h-[190px] flex flex-col justify-between bg-zinc-50 dark:bg-zinc-900">
-        {activeSlide.promotion_image || activeSlide.promoImage ? (
-          <div className="absolute inset-0 z-0">
-            <img onError={(e) => { e.currentTarget.style.display = 'none'; }} 
-              src={activeSlide.promotion_image || activeSlide.promoImage} 
-              alt={activeSlide.title}
-              className="w-full h-full object-contain opacity-30 dark:opacity-20"
-            />
-            <div className="absolute inset-0 bg-gradient-to-b from-transparent to-white/90 dark:to-zinc-900/90" />
-          </div>
-        ) : null}
+        <div className="absolute inset-0 z-0">
+          <img onError={(e) => { e.currentTarget.style.display = 'none'; }} 
+            src={activeSlide.image_url || activeSlide.promotion_image || activeSlide.promoImage} 
+            alt={activeSlide.title}
+            className="w-full h-full object-contain opacity-30 dark:opacity-20"
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent to-white/90 dark:to-zinc-900/90" />
+        </div>
         
         <div className="relative z-10 p-4 flex flex-col justify-between h-full">
           <div className="space-y-2">
@@ -139,7 +137,7 @@ export default function RepositorySlider() {
                 {activeSlide.title}
               </h4>
               <p className="text-[11px] text-zinc-600 dark:text-zinc-400 font-mono font-medium mt-1">
-                {activeSlide.product_name}
+                {activeSlide.subtitle || activeSlide.product_name}
               </p>
             </div>
 

@@ -16,7 +16,7 @@ export default function BannerMarquee() {
 
   React.useEffect(() => {
     Promise.all([
-      fetch('/api/repository').then(res => res.json()),
+      fetch('/api/admin/advertisements').then(res => res.json()),
       fetch('/api/admin/slider-settings').then(res => res.json())
     ])
     .then(([repoData, settingsData]) => {
@@ -27,7 +27,16 @@ export default function BannerMarquee() {
         // Filter and limit items based on settings
         const activeItems = repoData
           .filter(item => selectedIds.includes(item.id))
-          .slice(0, maxItems);
+          .slice(0, maxItems)
+          .map(ad => ({
+            id: ad.id,
+            title: ad.title,
+            subtitle: ad.subtitle,
+            img: ad.image_url || ad.img || ad.promotion_image,
+            category: ad.category,
+            date: ad.created_at || ad.date,
+            productName: ""
+          }));
           
         setBannerItems(activeItems);
       }
