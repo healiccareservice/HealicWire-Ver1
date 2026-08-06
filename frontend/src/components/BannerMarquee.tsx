@@ -55,11 +55,11 @@ export default function BannerMarquee() {
             className="relative w-[400px] flex flex-col mx-4 rounded-xl overflow-hidden shadow-lg group cursor-pointer shrink-0 bg-black"
           >
             <div className="relative h-[225px] w-full overflow-hidden">
-              <img 
+              <img onError={(e) => { e.currentTarget.style.display = 'none'; }} 
                 src={item.img} 
                 alt={item.title} 
                 referrerPolicy="no-referrer"
-                className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" 
+                className="absolute inset-0 w-full h-full object-contain group-hover:scale-105 transition-transform duration-700" 
               />
               
               {/* No overlays - display image only */}

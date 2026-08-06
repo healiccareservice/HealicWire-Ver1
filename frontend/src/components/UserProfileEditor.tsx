@@ -1,16 +1,20 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
-import { UserCircle, Save, Loader2, Image as ImageIcon } from "lucide-react";
+import { UserCircle, Save, Loader2, Image as ImageIcon, ArrowLeft } from "lucide-react";
 import { authFetch } from "../lib/api";
+import ImageSelectorModal from "./ImageSelectorModal";
 
 interface UserProfileEditorProps {
   session: any;
+  targetProfileId?: string;
+  onBack?: () => void;
 }
 
-export default function UserProfileEditor({ session }: UserProfileEditorProps) {
+export default function UserProfileEditor({ session, targetProfileId, onBack }: UserProfileEditorProps) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ text: string, type: "success" | "error" } | null>(null);
+  const [showImageSelector, setShowImageSelector] = useState(false);
 
   const [profile, setProfile] = useState({
     name: "",
@@ -18,7 +22,8 @@ export default function UserProfileEditor({ session }: UserProfileEditorProps) {
     role: "",
     work_place: "",
     bio: "",
-    avatar_url: ""
+    avatar_url: "",
+    email: ""
   });
 
   useEffect(() => {
@@ -30,18 +35,32 @@ export default function UserProfileEditor({ session }: UserProfileEditorProps) {
   const loadProfile = async () => {
     try {
       setLoading(true);
-      const res = await authFetch("/api/admin/profile");
+      const fetchUrl = targetProfileId ? `/api/admin/profiles/${targetProfileId}` : "/api/admin/profile";
+      const res = await authFetch(fetchUrl);
       if (!res.ok) throw new Error("Failed to load profile");
       const { profile: data } = await res.json();
       
-      setProfile({
-        name: data?.name || session.user.user_metadata?.name || "",
-        degree: data?.degree || session.user.user_metadata?.degree || "",
-        role: data?.role || session.user.user_metadata?.role || "",
-        work_place: data?.work_place || session.user.user_metadata?.work_place || "",
-        bio: data?.bio || session.user.user_metadata?.bio || "",
-        avatar_url: data?.avatar_url || session.user.user_metadata?.avatar_url || ""
-      });
+      if (targetProfileId) {
+        setProfile({
+          name: data?.name || "",
+          degree: data?.degree || "",
+          role: data?.role || "",
+          work_place: data?.work_place || "",
+          bio: data?.bio || "",
+          avatar_url: data?.avatar_url || "",
+          email: data?.email || ""
+        });
+      } else {
+        setProfile({
+          name: data?.name || session.user.user_metadata?.name || "",
+          degree: data?.degree || session.user.user_metadata?.degree || "",
+          role: data?.role || session.user.user_metadata?.role || "",
+          work_place: data?.work_place || session.user.user_metadata?.work_place || "",
+          bio: data?.bio || session.user.user_metadata?.bio || "",
+          avatar_url: data?.avatar_url || session.user.user_metadata?.avatar_url || "",
+          email: data?.email || session.user.email || ""
+        });
+      }
       
     } catch (error) {
       console.error("Failed to load profile:", error);
@@ -56,7 +75,8 @@ export default function UserProfileEditor({ session }: UserProfileEditorProps) {
     setMessage(null);
 
     try {
-      const response = await authFetch("/api/admin/profile", {
+      const fetchUrl = targetProfileId ? `/api/admin/profiles/${targetProfileId}` : "/api/admin/profile";
+      const response = await authFetch(fetchUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -76,15 +96,17 @@ export default function UserProfileEditor({ session }: UserProfileEditorProps) {
         throw new Error(errorData.error || "Failed to update profile via API");
       }
       
-      // Update session metadata to match profile data (excluding large fields like avatar_url and bio to prevent JWT bloat)
-      await supabase.auth.updateUser({
-        data: {
-          name: profile.name,
-          degree: profile.degree,
-          role: profile.role,
-          work_place: profile.work_place
-        }
-      });
+      // Update session metadata only if editing own profile
+      if (!targetProfileId) {
+        await supabase.auth.updateUser({
+          data: {
+            name: profile.name,
+            degree: profile.degree,
+            role: profile.role,
+            work_place: profile.work_place
+          }
+        });
+      }
 
       setMessage({ text: "Profile successfully updated!", type: "success" });
     } catch (error: any) {
@@ -97,15 +119,7 @@ export default function UserProfileEditor({ session }: UserProfileEditorProps) {
     }
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      setProfile(prev => ({ ...prev, avatar_url: event.target?.result as string }));
-    };
-    reader.readAsDataURL(file);
-  };
+
 
   if (loading) {
     return (
@@ -121,10 +135,22 @@ export default function UserProfileEditor({ session }: UserProfileEditorProps) {
       <div className="max-w-3xl mx-auto space-y-6">
         <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-6">
           <div className="space-y-1">
-            <h2 className="text-2xl font-bold font-mono uppercase tracking-tighter text-zinc-900 dark:text-white">
-              Profile <span className="text-teal-600">Settings</span>
-            </h2>
-            <p className="text-xs text-zinc-500 dark:text-zinc-450 font-sans">
+            <div className="flex items-center gap-3">
+              {onBack && (
+                <button 
+                  type="button"
+                  onClick={onBack}
+                  className="p-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300 transition-colors"
+                  title="Go back"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
+              )}
+              <h2 className="text-2xl font-bold font-mono uppercase tracking-tighter text-zinc-900 dark:text-white">
+                Profile <span className="text-teal-600">Settings</span>
+              </h2>
+            </div>
+            <p className="text-xs text-zinc-500 dark:text-zinc-450 font-sans pl-1">
               Manage your personal information, credentials, and how you appear in article bylines.
             </p>
           </div>
@@ -149,37 +175,62 @@ export default function UserProfileEditor({ session }: UserProfileEditorProps) {
               <div className="relative group shrink-0">
                 <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shrink-0">
                   {profile.avatar_url ? (
-                    <img src={profile.avatar_url} alt="Avatar Preview" className="w-full h-full object-cover" />
+                    <img onError={(e) => { e.currentTarget.style.display = 'none'; }} src={profile.avatar_url} alt="Avatar Preview" className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-zinc-400">
                       <UserCircle className="w-12 h-12" />
                     </div>
                   )}
                 </div>
-                <label className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer rounded-full">
+                <button 
+                  type="button"
+                  onClick={() => setShowImageSelector(true)}
+                  className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer rounded-full"
+                >
                   <ImageIcon className="w-6 h-6 mb-1" />
                   <span className="text-[10px] font-bold">Upload</span>
-                  <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
-                </label>
+                </button>
               </div>
               <div className="flex-1 w-full space-y-2 text-center sm:text-left">
                 <h3 className="font-bold text-sm text-zinc-900 dark:text-white">Profile Photo</h3>
                 <p className="text-xs text-zinc-500">Upload a professional headshot for your article bylines.</p>
                 <div className="flex flex-col space-y-1 mt-2">
                   <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300">Or Paste Image URL</label>
-                  <input 
-                    type="url"
-                    value={profile.avatar_url}
-                    onChange={(e) => setProfile({ ...profile, avatar_url: e.target.value })}
-                    className="w-full p-2.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm focus:ring-2 focus:ring-teal-500/20"
-                    placeholder="https://example.com/avatar.jpg"
-                  />
+                  <div className="flex space-x-2">
+                    <input 
+                      type="url"
+                      value={profile.avatar_url}
+                      onChange={(e) => setProfile({ ...profile, avatar_url: e.target.value })}
+                      className="w-full p-2.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm focus:ring-2 focus:ring-teal-500/20"
+                      placeholder="https://example.com/avatar.jpg"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowImageSelector(true)}
+                      className="px-3 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-lg text-xs font-bold text-zinc-700 dark:text-zinc-300 flex items-center space-x-1 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors shrink-0 cursor-pointer"
+                    >
+                      <ImageIcon className="w-4 h-4" />
+                      <span>Select Image</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
 
             {/* Form Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-xs font-bold font-mono uppercase text-zinc-500 dark:text-zinc-400">
+                  Email Address
+                </label>
+                <input
+                  disabled
+                  type="text"
+                  className="w-full p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-950 text-sm text-zinc-500 cursor-not-allowed"
+                  value={profile.email || ""}
+                />
+              </div>
+
               <div className="space-y-2">
                 <label className="text-xs font-bold font-mono uppercase text-zinc-500 dark:text-zinc-400">
                   Full Name <span className="text-red-500">*</span>
@@ -260,6 +311,16 @@ export default function UserProfileEditor({ session }: UserProfileEditorProps) {
           </div>
         </form>
       </div>
+
+      {showImageSelector && (
+        <ImageSelectorModal
+          onClose={() => setShowImageSelector(false)}
+          onSelect={(url) => {
+            setProfile(prev => ({ ...prev, avatar_url: url }));
+            setShowImageSelector(false);
+          }}
+        />
+      )}
     </div>
   );
 }

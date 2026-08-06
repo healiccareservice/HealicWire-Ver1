@@ -4,7 +4,7 @@
  */
 
 import { useState } from "react";
-import { Activity, ShieldAlert, BookOpen, Search, Sun, Moon, Database, Calendar, Stethoscope, Menu, X, UserCheck, Layers, Lightbulb, Landmark } from "lucide-react";
+import { Activity, ShieldAlert, BookOpen, Search, Sun, Moon, Database, Calendar, Stethoscope, Menu, X, UserCheck, Layers, Lightbulb, Landmark, Pill, Building2 } from "lucide-react";
 import HealicLogo from "./HealicLogo";
 
 interface HeaderProps {
@@ -32,12 +32,11 @@ export default function Header({
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 
   const tabs = [
-    { id: "news", label: "Latest News", icon: Activity },
+    { id: "treatment-updates", label: "Treatment Update", icon: Activity },
+    { id: "scientific-events", label: "Scientific Events", icon: Calendar },
+    { id: "pharma-drugs", label: "Pharma and Drugs", icon: Pill },
     { id: "guidelines", label: "Current Guidelines", icon: BookOpen },
-    { id: "pharma-drugs", label: "Pharma and Drugs", icon: Layers },
-    { id: "treatment-updates", label: "Treatment Update", icon: Stethoscope },
-    { id: "events", label: "Scientific Events", icon: Calendar },
-    { id: "providers", label: "Health Care Providers", icon: Landmark }
+    { id: "providers", label: "Healthcare Providers", icon: Landmark }
   ];
 
   const categories = [
@@ -91,12 +90,6 @@ export default function Header({
                 >
                   <Icon className="w-4 h-4" />
                   <span>{tab.label}</span>
-                  {tab.id === "alerts" && alertCount > 0 && (
-                    <span className="flex h-2 w-2 relative">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
-                    </span>
-                  )}
                 </button>
               );
             })}
@@ -195,11 +188,6 @@ export default function Header({
                   <Icon className="w-4 h-4" />
                   <span>{tab.label}</span>
                 </div>
-                {tab.id === "alerts" && alertCount > 0 && (
-                  <span className="px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-red-500 text-white">
-                    {alertCount} ALERT
-                  </span>
-                )}
               </button>
             );
           })}

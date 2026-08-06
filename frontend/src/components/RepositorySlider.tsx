@@ -117,10 +117,10 @@ export default function RepositorySlider() {
       <div className="relative w-full min-h-[190px] flex flex-col justify-between bg-zinc-50 dark:bg-zinc-900">
         {activeSlide.promotion_image || activeSlide.promoImage ? (
           <div className="absolute inset-0 z-0">
-            <img 
+            <img onError={(e) => { e.currentTarget.style.display = 'none'; }} 
               src={activeSlide.promotion_image || activeSlide.promoImage} 
               alt={activeSlide.title}
-              className="w-full h-full object-cover opacity-30 dark:opacity-20"
+              className="w-full h-full object-contain opacity-30 dark:opacity-20"
             />
             <div className="absolute inset-0 bg-gradient-to-b from-transparent to-white/90 dark:to-zinc-900/90" />
           </div>

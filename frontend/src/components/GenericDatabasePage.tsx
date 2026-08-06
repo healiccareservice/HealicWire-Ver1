@@ -12,20 +12,22 @@ import { Article, Region } from "../types";
 import { supabase, mapArticleFromDB } from "../lib/supabase";
 import ArticleCard from "./ArticleCard";
 
-interface ProvidersPageProps {
+interface GenericDatabasePageProps {
   onSelectArticle: (article: Article) => void;
+  tableName: string;
+  title: string;
+  subtitle: string;
+  Icon: React.ElementType;
 }
 
-export default function ProvidersPage({ onSelectArticle }: ProvidersPageProps) {
+export default function GenericDatabasePage({ onSelectArticle, tableName, title, subtitle, Icon }: GenericDatabasePageProps) {
   const [articles, setArticles] = useState<Article[]>([]);
   const [loading, setLoading] = useState(true);
   
   // Filter States
   const [searchQuery, setSearchQuery] = useState("");
-  const [providerTypeFilter, setProviderTypeFilter] = useState("All");
   const [regionFilter, setRegionFilter] = useState("All");
-  const [contentTypeFilter, setContentTypeFilter] = useState("All");
-  const [viewMode, setViewMode] = useState<"priority" | "grid">("priority");
+  const [viewMode, setViewMode] = useState<"priority" | "grid">("grid");
 
   const [savedArticleIds, setSavedArticleIds] = useState<string[]>(() => {
     try {
@@ -35,20 +37,6 @@ export default function ProvidersPage({ onSelectArticle }: ProvidersPageProps) {
       return [];
     }
   });
-
-  const INSTITUTION_TYPES = [
-    "All",
-    "Corporate Hospitals",
-    "Private Clinics",
-    "Government Facilities",
-    "Diagnostic Centres",
-    "Medical Colleges",
-    "NGOs & Public Health"
-  ];
-
-  const CONTENT_TYPES = [
-    "All", "News", "Views", "Blogs"
-  ];
 
   const REGIONS = [
     "All",
@@ -61,23 +49,29 @@ export default function ProvidersPage({ onSelectArticle }: ProvidersPageProps) {
     const fetchArticles = async () => {
       try {
         const { data, error } = await supabase
-          .from("providers")
-          .select("*")
-          .eq("status", "published")
-          .order("published_at", { ascending: false });
+          .from(tableName)
+          .select("*");
 
         if (error) throw error;
         if (data) {
-          setArticles(data.map(mapArticleFromDB));
+          const mappedArticles = data.map(mapArticleFromDB);
+          // Sort by mapped date in descending order, fallback to created_at
+          mappedArticles.sort((a, b) => {
+            const timeA = new Date(a.publishedAt || 0).getTime();
+            const timeB = new Date(b.publishedAt || 0).getTime();
+            if (timeA !== timeB) return timeB - timeA;
+            return new Date((b as any).created_at || 0).getTime() - new Date((a as any).created_at || 0).getTime();
+          });
+          setArticles(mappedArticles);
         }
       } catch (error) {
-        console.error("Error fetching providers news:", error);
+        console.error(`Error fetching ${tableName} news:`, error);
       } finally {
         setLoading(false);
       }
     };
     fetchArticles();
-  }, []);
+  }, [tableName]);
 
   const handleToggleSave = (id: string) => {
     setSavedArticleIds(prev => {
@@ -94,18 +88,12 @@ export default function ProvidersPage({ onSelectArticle }: ProvidersPageProps) {
       (art.title && art.title.toLowerCase().includes(q)) ||
       (art.subhead && art.subhead.toLowerCase().includes(q)) ||
       (art.summary && art.summary.toLowerCase().includes(q)) ||
+      (art.studySummary && art.studySummary.toLowerCase().includes(q)) ||
       (art.bodyAnalysis && art.bodyAnalysis.toLowerCase().includes(q));
-
-    // Mock filtering logic for demo purposes based on keywords/specialties since we don't have explicit DB columns for these on articles yet
-    const typeStr = providerTypeFilter !== "All" ? providerTypeFilter.toLowerCase() : "";
-    const matchesType = providerTypeFilter === "All" || art.headline.toLowerCase().includes(typeStr) || art.bodyAnalysis.toLowerCase().includes(typeStr);
 
     const matchesRegion = regionFilter === "All" || art.region === regionFilter;
     
-    const contentStr = contentTypeFilter !== "All" ? contentTypeFilter.toLowerCase() : "";
-    const matchesContent = contentTypeFilter === "All" || art.headline.toLowerCase().includes(contentStr) || art.sourceName.toLowerCase().includes(contentStr);
-
-    return matchesSearch && matchesType && matchesRegion && matchesContent;
+    return matchesSearch && matchesRegion;
   });
 
   const spotlightArticles = filteredArticles.filter(a => a.spotlight);
@@ -119,11 +107,11 @@ export default function ProvidersPage({ onSelectArticle }: ProvidersPageProps) {
       {/* Main Header */}
       <div className="mb-8">
         <h1 className="text-3xl font-extrabold tracking-tight text-teal-900 dark:text-teal-400 sm:text-4xl font-serif flex items-center space-x-3">
-          <Landmark className="w-8 h-8" />
-          <span>Healthcare Providers & Institutions</span>
+          <Icon className="w-8 h-8" />
+          <span>{title}</span>
         </h1>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400 max-w-3xl leading-relaxed">
-          The central hub for news, views, and blogs related to Corporate Hospitals, Clinics, Medical Colleges, Government Facilities, NGOs, and Telemedicine Healthcare Providers.
+          {subtitle}
         </p>
       </div>
 
@@ -162,12 +150,17 @@ export default function ProvidersPage({ onSelectArticle }: ProvidersPageProps) {
                 <div className="p-5 flex-1 flex flex-col justify-between">
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                    <div className="flex gap-1.5">
+                    <div className="flex gap-1.5 flex-wrap">
                       <span className="px-2.5 py-0.5 rounded text-[9.5px] font-mono font-bold bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 uppercase">
                         {art.region}
                       </span>
-                      {art.updateCategory && (
+                      {art.clinicalImpact && (
                         <span className="px-2.5 py-0.5 rounded text-[9.5px] font-mono font-bold bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 uppercase">
+                          {art.clinicalImpact}
+                        </span>
+                      )}
+                      {art.updateCategory && (
+                        <span className="px-2.5 py-0.5 rounded text-[9.5px] font-mono font-bold bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 uppercase">
                           {art.updateCategory}
                         </span>
                       )}
@@ -180,7 +173,7 @@ export default function ProvidersPage({ onSelectArticle }: ProvidersPageProps) {
                     {art.title || art.headline}
                   </h3>
                   <p className="text-xs text-zinc-600 dark:text-zinc-400 line-clamp-2 leading-relaxed">
-                    {art.summary || art.summary30s}
+                    {art.studySummary || art.summary || art.summary30s}
                   </p>
                 </div>
                 
@@ -207,7 +200,7 @@ export default function ProvidersPage({ onSelectArticle }: ProvidersPageProps) {
           <div className="relative w-full md:w-2/3">
             <input
               type="text"
-              placeholder="Search provider news, blogs, and views..."
+              placeholder={`Search ${title.toLowerCase()}...`}
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900 text-sm text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
@@ -242,14 +235,7 @@ export default function ProvidersPage({ onSelectArticle }: ProvidersPageProps) {
         </div>
 
         {/* Filters Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-zinc-100 dark:border-zinc-900 font-mono text-xs">
-          <div>
-            <label className="block text-[10px] text-zinc-400 uppercase font-bold mb-1">Provider Type</label>
-            <select value={providerTypeFilter} onChange={e => setProviderTypeFilter(e.target.value)} className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200 font-sans">
-              {INSTITUTION_TYPES.map(p => <option key={p} value={p}>{p}</option>)}
-            </select>
-          </div>
-
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-zinc-100 dark:border-zinc-900 font-mono text-xs">
           <div>
             <label className="block text-[10px] text-zinc-400 uppercase font-bold mb-1">Region</label>
             <select value={regionFilter} onChange={e => setRegionFilter(e.target.value)} className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200 font-sans">
@@ -257,24 +243,15 @@ export default function ProvidersPage({ onSelectArticle }: ProvidersPageProps) {
             </select>
           </div>
 
-          <div>
-            <label className="block text-[10px] text-zinc-400 uppercase font-bold mb-1">Content Type</label>
-            <select value={contentTypeFilter} onChange={e => setContentTypeFilter(e.target.value)} className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200 font-sans">
-              {CONTENT_TYPES.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </div>
-
-          <div className="flex items-end">
+          <div className="col-span-1 sm:col-span-2 flex items-end">
             <button
               onClick={() => {
                 setSearchQuery("");
-                setProviderTypeFilter("All");
                 setRegionFilter("All");
-                setContentTypeFilter("All");
               }}
-              className="w-full py-1.5 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 rounded-lg text-xs font-mono font-bold transition-all border border-zinc-200 dark:border-zinc-800 flex items-center justify-center space-x-1"
+              className="px-3 py-1.5 rounded-lg text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900 border border-transparent transition-all flex items-center space-x-1"
             >
-              <RefreshCw className="w-3 h-3" />
+              <RefreshCw className="w-3.5 h-3.5" />
               <span>Reset Filters</span>
             </button>
           </div>
@@ -292,7 +269,7 @@ export default function ProvidersPage({ onSelectArticle }: ProvidersPageProps) {
       ) : filteredArticles.length === 0 ? (
         <div className="text-center py-16 border border-dashed border-zinc-200 dark:border-zinc-800 rounded-2xl max-w-lg mx-auto">
           <Calendar className="w-10 h-10 text-zinc-300 mx-auto mb-3" />
-          <p className="text-sm text-zinc-600 font-bold mb-1">No providers intelligence matches your criteria</p>
+          <p className="text-sm text-zinc-600 font-bold mb-1">No intelligence matches your criteria</p>
           <button onClick={() => setSearchQuery("")} className="px-4 py-2 bg-teal-700 text-white text-xs font-mono rounded-lg font-bold">Clear Search</button>
         </div>
       ) : searchQuery ? (
@@ -323,7 +300,7 @@ export default function ProvidersPage({ onSelectArticle }: ProvidersPageProps) {
                   <div className="flex items-center justify-between border-b-2 border-teal-600 pb-2">
                     <div className="flex items-center space-x-2">
                       <span className="px-2.5 py-0.5 rounded-full bg-teal-600 text-white text-[10px] font-mono font-black uppercase">Tier 1</span>
-                      <h2 className="text-xl font-bold font-serif text-zinc-900 dark:text-white">India Focus Healthcare Providers ({indiaFocusArticles.length})</h2>
+                      <h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 font-serif">India Focus {title || 'Database'} ({indiaFocusArticles.length})</h2>
                     </div>
                   </div>
                   {indiaFocusArticles.length === 0 ? (
@@ -350,7 +327,7 @@ export default function ProvidersPage({ onSelectArticle }: ProvidersPageProps) {
                   <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-2">
                     <div className="flex items-center space-x-2">
                       <span className="px-2.5 py-0.5 rounded-full bg-zinc-200 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 text-[10px] font-mono font-black uppercase">Tier 2</span>
-                      <h2 className="text-xl font-bold font-serif text-zinc-900 dark:text-white">Global & International Healthcare Providers ({globalArticles.length})</h2>
+                      <h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 font-serif">Global & International {title || 'Database'} ({globalArticles.length})</h2>
                     </div>
                   </div>
                   {globalArticles.length === 0 ? (

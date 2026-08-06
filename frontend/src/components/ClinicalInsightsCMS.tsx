@@ -35,6 +35,11 @@ export default function ClinicalInsightsCMS({ onClose, session }: ClinicalInsigh
     readingTimeMinutes: 5,
     summary30s: "",
     bodyAnalysis: "",
+    why_this_matters: "",
+    clinical_pearls: "",
+    future_directions: "",
+    evidence_summary: "",
+    references: "",
     criteria: "",
     clinicalImpactScore: 8,
     status: "published" as "published" | "draft" | "ingested" | "archived"
@@ -91,7 +96,17 @@ export default function ClinicalInsightsCMS({ onClose, session }: ClinicalInsigh
         topic: insightForm.headline,
         criteria: insightForm.criteria,
         category: insightForm.category,
-        region: insightForm.region
+        region: insightForm.region,
+        summary30s: insightForm.summary30s,
+        bodyAnalysis: insightForm.bodyAnalysis,
+        detailed_article: insightForm.bodyAnalysis,
+        why_this_matters: insightForm.why_this_matters,
+        clinical_pearls: insightForm.clinical_pearls,
+        future_directions: insightForm.future_directions,
+        evidence_summary: insightForm.evidence_summary,
+        references: insightForm.references,
+        clinicalImpactScore: insightForm.clinicalImpactScore,
+        status: insightForm.status
       })
     })
       .then(res => res.json())
@@ -168,6 +183,11 @@ export default function ClinicalInsightsCMS({ onClose, session }: ClinicalInsigh
           readingTimeMinutes: 5,
           summary30s: "",
           bodyAnalysis: "",
+          why_this_matters: "",
+          clinical_pearls: "",
+          future_directions: "",
+          evidence_summary: "",
+          references: "",
           criteria: "",
           clinicalImpactScore: 8,
           status: "published"
@@ -194,7 +214,12 @@ export default function ClinicalInsightsCMS({ onClose, session }: ClinicalInsigh
       sourceName: article.sourceName || (article as any).author_name || session?.user?.user_metadata?.name || session?.user?.email,
       readingTimeMinutes: article.readingTimeMinutes || 5,
       summary30s: article.summary30s || "",
-      bodyAnalysis: article.bodyAnalysis || "",
+      bodyAnalysis: article.bodyAnalysis || (article as any).detailed_article || "",
+      why_this_matters: (article as any).why_this_matters || "",
+      clinical_pearls: (article as any).clinical_pearls || "",
+      future_directions: (article as any).future_directions || "",
+      evidence_summary: (article as any).evidence_summary || "",
+      references: (article as any).references || "",
       criteria: "",
       clinicalImpactScore: article.clinicalImpactScore || 8,
       status: article.status || "published"
@@ -388,11 +413,56 @@ export default function ClinicalInsightsCMS({ onClose, session }: ClinicalInsigh
                       </div>
                       
                       <div>
-                        <label className="block text-xs font-bold font-mono uppercase text-zinc-700 dark:text-zinc-300 mb-2">Body Text (Markdown supported) *</label>
+                        <label className="block text-xs font-bold font-mono uppercase text-zinc-700 dark:text-zinc-300 mb-2">Detailed Article (Markdown supported) *</label>
                         <textarea
                           value={insightForm.bodyAnalysis}
                           onChange={(e) => setInsightForm({ ...insightForm, bodyAnalysis: e.target.value })}
                           className="w-full px-4 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg text-sm bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500 h-64 font-mono"
+                        />
+                      </div>
+                      
+                      <div>
+                        <label className="block text-xs font-bold font-mono uppercase text-zinc-700 dark:text-zinc-300 mb-2">Why This Matters</label>
+                        <textarea
+                          value={insightForm.why_this_matters}
+                          onChange={(e) => setInsightForm({ ...insightForm, why_this_matters: e.target.value })}
+                          className="w-full px-4 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg text-sm bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500 h-24 font-mono"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold font-mono uppercase text-zinc-700 dark:text-zinc-300 mb-2">Clinical Pearls</label>
+                        <textarea
+                          value={insightForm.clinical_pearls}
+                          onChange={(e) => setInsightForm({ ...insightForm, clinical_pearls: e.target.value })}
+                          className="w-full px-4 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg text-sm bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500 h-24 font-mono"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold font-mono uppercase text-zinc-700 dark:text-zinc-300 mb-2">Future Directions</label>
+                        <textarea
+                          value={insightForm.future_directions}
+                          onChange={(e) => setInsightForm({ ...insightForm, future_directions: e.target.value })}
+                          className="w-full px-4 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg text-sm bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500 h-24 font-mono"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold font-mono uppercase text-zinc-700 dark:text-zinc-300 mb-2">Evidence Summary</label>
+                        <textarea
+                          value={insightForm.evidence_summary}
+                          onChange={(e) => setInsightForm({ ...insightForm, evidence_summary: e.target.value })}
+                          className="w-full px-4 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg text-sm bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500 h-24 font-mono"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold font-mono uppercase text-zinc-700 dark:text-zinc-300 mb-2">References</label>
+                        <textarea
+                          value={insightForm.references}
+                          onChange={(e) => setInsightForm({ ...insightForm, references: e.target.value })}
+                          className="w-full px-4 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg text-sm bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500 h-24 font-mono"
                         />
                       </div>
                       

@@ -5,29 +5,35 @@
 
 import { useState, useEffect } from "react";
 import { Search, Calendar, Landmark, HelpCircle, AlertCircle, ChevronDown, ChevronUp, BookOpen, ExternalLink, Sparkles } from "lucide-react";
-import { LivingGuideline } from "../types";
+import { LivingGuideline, Article } from "../types";
 import { supabase, mapGuidelineFromDB, mapArticleFromDB } from "../lib/supabase";
 
 interface LivingGuidelinesProps {
+  onSelectArticle: (article: Article) => void;
   title?: string;
   subtitle?: string;
+  tableName?: string;
 }
 
-export default function LivingGuidelines({ title = "Current Guidelines Registry", subtitle = "Real-time registry tracking major clinical, drug, and public health recommendation shifts. Stay ahead of changing therapeutic guidelines." }: LivingGuidelinesProps) {
+export default function LivingGuidelines({ 
+  onSelectArticle,
+  title = "Current Guidelines Registry", 
+  subtitle = "Real-time registry tracking major clinical, drug, and public health recommendation shifts. Stay ahead of changing therapeutic guidelines.",
+  tableName = "current_guidelines"
+}: LivingGuidelinesProps) {
   const [guidelines, setGuidelines] = useState<LivingGuideline[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const [treatmentUpdates, setTreatmentUpdates] = useState<any[]>([]);
-
   useEffect(() => {
     const fetchGuidelines = async () => {
       try {
-        const { data, error } = await supabase.from('current_guidelines').select('*');
+        const { data, error } = await supabase.from(tableName).select('*');
         if (error) throw error;
         if (data) {
           const mapped = data.map(mapGuidelineFromDB);
+          mapped.sort((a, b) => new Date(b.lastUpdated || 0).getTime() - new Date(a.lastUpdated || 0).getTime());
           setGuidelines(mapped);
           if (mapped.length > 0) setExpandedId(mapped[0].id);
         }
@@ -38,32 +44,16 @@ export default function LivingGuidelines({ title = "Current Guidelines Registry"
       }
     };
 
-    const fetchTreatmentUpdates = async () => {
-      try {
-        const { data, error } = await supabase.from('articles').select('*');
-        if (error) throw error;
-        if (data) {
-          const mapped = data.map(mapArticleFromDB);
-          const tu = mapped.filter((a: any) =>
-            a.headline?.startsWith("Treatment Update:") ||
-            (a.sourceName === "HealicWire Special Page Engine" && !a.headline?.startsWith("Scientific Events:"))
-          );
-          setTreatmentUpdates(tu);
-        }
-      } catch (err) {
-        console.error(err);
-      }
-    };
-
     fetchGuidelines();
-    fetchTreatmentUpdates();
-  }, []);
+  }, [title]);
 
   const filtered = guidelines.filter(g =>
-    g.condition.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    g.issuingOrganization.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    g.currentRecommendation.toLowerCase().includes(searchQuery.toLowerCase())
+    (g.condition || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (g.issuingOrganization || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (g.currentRecommendation || "").toLowerCase().includes(searchQuery.toLowerCase())
   );
+  
+  const spotlightGuidelines = filtered.filter(g => g.spotlight);
 
   return (
     <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6">
@@ -81,61 +71,58 @@ export default function LivingGuidelines({ title = "Current Guidelines Registry"
         </p>
       </div>
 
-      {/* FEATURED TREATMENT UPDATES CREATED IN CREATE PAGES (ALWAYS ON TOP) */}
-      {treatmentUpdates.length > 0 && (
-        <div className="mb-8 p-6 rounded-2xl bg-gradient-to-r from-teal-900/10 via-emerald-900/10 to-cyan-900/10 dark:from-teal-950/40 dark:via-emerald-950/40 dark:to-cyan-950/40 border border-teal-200 dark:border-teal-800/60 shadow-xs space-y-4 font-sans">
+      {/* Spotlight Section */}
+      {!loading && spotlightGuidelines.length > 0 && (
+        <div className="mb-8 p-6 rounded-2xl bg-gradient-to-r from-teal-900/10 via-emerald-900/10 to-teal-900/10 dark:from-teal-950/40 dark:via-emerald-950/40 dark:to-teal-950/40 border border-teal-200 dark:border-teal-800/60 shadow-xs space-y-4">
           <div className="flex items-center justify-between border-b border-teal-200/60 dark:border-teal-800/40 pb-3">
             <div className="flex items-center space-x-2.5">
               <Sparkles className="w-5 h-5 text-teal-600 dark:text-teal-400 animate-pulse shrink-0" />
               <div>
                 <h2 className="text-base font-extrabold text-zinc-900 dark:text-white uppercase font-mono tracking-tight">
-                  Featured Treatment Updates & Protocols
+                  Spotlight
                 </h2>
                 <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                  Real-time protocol updates and prescribing guidelines generated via HealicWire.
+                  Critical updates and spotlight guidelines.
                 </p>
               </div>
             </div>
-
-            <span className="px-2.5 py-1 rounded-full text-[10px] font-mono font-bold bg-teal-600 text-white uppercase tracking-wider shrink-0">
-              Active Updates ({treatmentUpdates.length})
-            </span>
           </div>
-
+          
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {treatmentUpdates.map(item => (
-              <div
-                key={item.id}
-                className="bg-white dark:bg-zinc-950 p-5 rounded-xl border border-teal-200/80 dark:border-teal-800/80 shadow-2xs hover:shadow-md transition-all flex flex-col justify-between"
-              >
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="px-2.5 py-0.5 rounded text-[9.5px] font-mono font-bold bg-teal-100 dark:bg-teal-950 text-teal-700 dark:text-teal-300 uppercase">
-                      {item.category || "Treatment Update"}
-                    </span>
-                    <span className="text-[10.5px] font-mono text-zinc-400">
-                      {new Date(item.publishedAt || Date.now()).toLocaleDateString("en-IN")}
-                    </span>
-                  </div>
-
-                  <h3 className="text-sm font-bold text-zinc-900 dark:text-white leading-snug">
-                    {item.headline}
-                  </h3>
-
-                  <p className="text-xs text-zinc-600 dark:text-zinc-400 line-clamp-2 leading-relaxed">
-                    {item.summary30s || item.bodyAnalysis}
-                  </p>
-                </div>
-
-                <div className="mt-4 pt-3 border-t border-zinc-100 dark:border-zinc-900 flex items-center justify-between text-xs">
-                  <span className="text-[10.5px] font-mono text-teal-700 dark:text-teal-400 font-bold">
-                    ✓ Official Protocol Guideline
-                  </span>
-                  <span className="text-[10.5px] font-mono text-zinc-400">
-                    {item.readingTimeMinutes || 4}m read
-                  </span>
-                </div>
-              </div>
+            {spotlightGuidelines.slice(0, 2).map(g => (
+               <div 
+                  key={g.id} 
+                  onClick={() => onSelectArticle({
+                    id: g.id,
+                    headline: g.title || g.condition || "Clinical Guideline",
+                    sourceName: g.issuingOrganization || "Guideline Authority",
+                    publishedAt: g.lastUpdated,
+                    summary30s: g.currentRecommendation || "",
+                    bodyAnalysis: g.whatsNew || g.reasonForChange || "",
+                    impactScores: { clinicalPractice: 9, publicHealth: 8, policy: 7, research: 5 },
+                    whyThisMatters: { shortTerm: g.reasonForChange || "", longTerm: g.reasonForChange || "" },
+                    evidenceLevel: (g.evidenceLevel as any) || "Systematic Review",
+                    sourceUrl: (g.references && g.references.length > 0) ? g.references[0] : "#",
+                    isAiAssisted: true,
+                    peerReviewed: true,
+                    fundingSource: "Unknown",
+                    coiNote: "None",
+                    references: g.references || [],
+                    views: 0,
+                    imageUrl: g.imageUrl
+                  } as unknown as Article)}
+                  className="bg-white dark:bg-zinc-950 rounded-xl border border-teal-200/80 dark:border-teal-800/80 shadow-2xs hover:shadow-md cursor-pointer transition-all overflow-hidden flex flex-col"
+                >
+                 {g.imageUrl && (
+                   <div className="w-full h-40 bg-zinc-100 dark:bg-zinc-900">
+                     <img src={g.imageUrl} alt={g.title} className="w-full h-full object-contain" />
+                   </div>
+                 )}
+                 <div className="p-5 flex-1 flex flex-col">
+                   <h3 className="text-sm font-bold text-zinc-900 dark:text-white leading-snug">{g.title || g.condition}</h3>
+                   <p className="text-xs text-zinc-600 dark:text-zinc-400 line-clamp-2 mt-2">{g.currentRecommendation}</p>
+                 </div>
+               </div>
             ))}
           </div>
         </div>
@@ -194,7 +181,7 @@ export default function LivingGuidelines({ title = "Current Guidelines Registry"
                       </span>
                     </div>
                     <h3 className="text-base font-bold text-zinc-900 dark:text-white">
-                      {g.condition} Treatment Guidelines
+                      {g.title || `${g.condition} Treatment Guidelines`}
                     </h3>
                   </div>
                   <div className="shrink-0 p-1.5 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-850">
@@ -236,15 +223,68 @@ export default function LivingGuidelines({ title = "Current Guidelines Registry"
                       )}
                     </div>
 
-                    {/* Reason For Change */}
+                    {/* What's New or Reason For Change */}
                     <div className="space-y-1.5">
                       <div className="flex items-center space-x-1.5 text-zinc-700 dark:text-zinc-300 font-bold text-xs uppercase tracking-wider">
                         <HelpCircle className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
-                        <span>Why this recommendation changed</span>
+                        <span>{g.whatsNew ? "What's New" : "Why this recommendation changed"}</span>
                       </div>
-                      <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed bg-zinc-50 dark:bg-zinc-900/40 p-3 rounded-lg border border-zinc-150 dark:border-zinc-850">
-                        {g.reasonForChange}
+                      <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed bg-zinc-50 dark:bg-zinc-900/40 p-3 rounded-lg border border-zinc-150 dark:border-zinc-850 whitespace-pre-wrap">
+                        {g.whatsNew || g.reasonForChange}
                       </p>
+                    </div>
+
+                    {/* Key Clinical Recommendations */}
+                    {g.keyClinicalRecommendations && Object.keys(g.keyClinicalRecommendations).length > 0 && (
+                      <div className="space-y-2 mt-4">
+                        <h4 className="font-bold text-sm text-zinc-800 dark:text-zinc-200 uppercase tracking-wider border-b border-zinc-200 dark:border-zinc-800 pb-1">
+                          Key Clinical Recommendations
+                        </h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {Object.entries(g.keyClinicalRecommendations).map(([key, value]) => {
+                            if (!value) return null;
+                            return (
+                              <div key={key} className="p-3 bg-zinc-50 dark:bg-zinc-900/50 rounded-lg border border-zinc-100 dark:border-zinc-800">
+                                <span className="block text-xs font-bold text-teal-700 dark:text-teal-400 capitalize mb-1">
+                                  {key.replace(/([A-Z])/g, ' $1').trim()}
+                                </span>
+                                <p className="text-xs text-zinc-600 dark:text-zinc-400 whitespace-pre-wrap">{value as string}</p>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Clinical Pearls */}
+                    {g.clinicalPearls && g.clinicalPearls.length > 0 && (
+                      <div className="space-y-2 mt-4 bg-teal-50/50 dark:bg-teal-950/20 p-4 rounded-lg border border-teal-100 dark:border-teal-900/40">
+                        <h4 className="font-bold text-sm text-teal-800 dark:text-teal-300 flex items-center space-x-1.5">
+                          <Sparkles className="w-4 h-4" />
+                          <span>Clinical Pearls</span>
+                        </h4>
+                        <ul className="list-disc pl-5 space-y-1 text-xs text-zinc-700 dark:text-zinc-300">
+                          {g.clinicalPearls.map((pearl, i) => (
+                            <li key={i}>{pearl}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Evidence Level & Target Audience */}
+                    <div className="grid grid-cols-2 gap-4 mt-4">
+                      {g.evidenceLevel && (
+                        <div>
+                          <span className="block text-[10px] uppercase font-bold text-zinc-400">Evidence Level</span>
+                          <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">{g.evidenceLevel}</span>
+                        </div>
+                      )}
+                      {g.targetAudience && (
+                        <div>
+                          <span className="block text-[10px] uppercase font-bold text-zinc-400">Target Audience</span>
+                          <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">{g.targetAudience}</span>
+                        </div>
+                      )}
                     </div>
 
                     {/* India specific applicability */}

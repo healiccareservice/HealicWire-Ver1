@@ -4,7 +4,7 @@
  */
 
 import React, { Component, useState, useEffect, useRef } from "react";
-import { Sparkles, Activity, ShieldAlert, BookOpen, Search, User, SlidersHorizontal, Eye, Star, Heart, FileText, CheckCircle, Mail, HelpCircle, Landmark, Bell, AlertTriangle, UserCheck, ChevronRight, ChevronDown, Clock, ChevronLeft } from "lucide-react";
+import { Sparkles, Activity, ShieldAlert, ShieldCheck, BookOpen, Search, User, SlidersHorizontal, Eye, Star, Heart, FileText, CheckCircle, Mail, HelpCircle, Landmark, Bell, AlertTriangle, UserCheck, ChevronRight, ChevronDown, Clock, ChevronLeft } from "lucide-react";
 import HealicLogo from "./components/HealicLogo";
 import Header from "./components/Header";
 import ArticleCard from "./components/ArticleCard";
@@ -14,18 +14,16 @@ import HospitalIntelligence from "./components/HospitalIntelligence";
 import AdminCMS from "./components/AdminCMS";
 import ProposalPortal from "./components/ProposalPortal";
 import ScientificEvents from "./components/ScientificEvents";
-import ScientificEventPage from "./components/ScientificEventPage";
-import PortalPage from "./components/PortalPage";
-import EditorialsPage from "./components/EditorialsPage";
-import ClinicalInsightsPage from "./components/ClinicalInsightsPage";
 import WhatWeDoSlider from "./components/WhatWeDoSlider";
-import RepositorySlider from "./components/RepositorySlider";
 import Login from "./components/Login";
 import EditorialCMS from "./components/EditorialCMS";
 import ClinicalInsightsCMS from "./components/ClinicalInsightsCMS";
 import ProvidersPage from "./components/ProvidersPage";
-import BannerMarquee from "./components/BannerMarquee";
+import HeroSection from "./components/HeroSection";
+import EditorialsPage from "./components/EditorialsPage";
+import ClinicalInsightsPage from "./components/ClinicalInsightsPage";
 import RepositoryPage from "./components/RepositoryPage";
+import { FactCheckWidget } from "./components/FactCheckWidget";
 import { supabase, mapArticleFromDB, mapAlertFromDB } from "./lib/supabase";
 import { Article, HospitalAlert, ImpactSeverity } from "./types";
 
@@ -140,7 +138,7 @@ export default function App() {
       if (sub) { portalPageSection = "treatment-updates"; portalPageSlug = sub; }
     }
   } else if (currentPath.startsWith("/scientificevents")) {
-    currentTab = "events";
+    currentTab = "scientific-events";
     if (currentPath.startsWith("/scientificevents/")) {
       const sub = currentPath.replace("/scientificevents/", "").split("/")[0].trim();
       if (sub) eventPageSlug = sub;
@@ -182,7 +180,7 @@ export default function App() {
   const setCurrentTab = (tab: string) => {
     let newPath = "/";
     if (tab === "treatment-updates") newPath = "/treatmentupdate";
-    else if (tab === "events") newPath = "/scientificevents";
+    else if (tab === "scientific-events") newPath = "/scientificevents";
     else if (tab === "editorials") newPath = "/editorials";
     else if (tab === "clinical-insights") newPath = "/clinicalinsights";
     else if (tab === "guidelines") newPath = "/guidelines";
@@ -227,6 +225,57 @@ export default function App() {
   const [editorialProfiles, setEditorialProfiles] = useState<Record<string, any>>({});
   const [clinicalInsights, setClinicalInsights] = useState<Article[]>([]);
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
+
+  // Auto-slide Clinical Insights
+  useEffect(() => {
+    if (clinicalInsights.length === 0) return;
+    
+    const slideInterval = setInterval(() => {
+      const scrollIt = (ref: React.RefObject<HTMLDivElement | null>) => {
+        if (ref.current) {
+          const container = ref.current;
+          // Calculate if we are at the end (allowing 10px leeway)
+          const isAtEnd = container.scrollLeft + container.clientWidth >= container.scrollWidth - 10;
+          if (isAtEnd) {
+            // Loop back to start
+            container.scrollTo({ left: 0, behavior: 'smooth' });
+          } else {
+            // Scroll to the next card
+            container.scrollTo({ left: container.scrollLeft + container.clientWidth, behavior: 'smooth' });
+          }
+        }
+      };
+      
+      scrollIt(mobileClinicalInsightsScrollRef);
+      scrollIt(desktopClinicalInsightsScrollRef);
+    }, 3000);
+
+    return () => clearInterval(slideInterval);
+  }, [clinicalInsights.length]);
+
+  // Auto-slide Editorials
+  useEffect(() => {
+    if (editorials.length === 0) return;
+    
+    const slideInterval = setInterval(() => {
+      const scrollIt = (ref: React.RefObject<HTMLDivElement | null>) => {
+        if (ref.current) {
+          const container = ref.current;
+          const isAtEnd = container.scrollLeft + container.clientWidth >= container.scrollWidth - 10;
+          if (isAtEnd) {
+            container.scrollTo({ left: 0, behavior: 'smooth' });
+          } else {
+            container.scrollTo({ left: container.scrollLeft + container.clientWidth, behavior: 'smooth' });
+          }
+        }
+      };
+      
+      scrollIt(mobileEditorialsScrollRef);
+      scrollIt(desktopEditorialsScrollRef);
+    }, 3000);
+
+    return () => clearInterval(slideInterval);
+  }, [editorials.length]);
 
   // Interface overlays
   const [showPolicies, setShowPolicies] = useState<"about" | "editorial" | "disclaimer" | null>(null);
@@ -361,9 +410,29 @@ export default function App() {
 
       if (finalData && finalData.length > 0) {
         const mappedEditorials = finalData.map(mapArticleFromDB);
-        setEditorials(mappedEditorials);
         
-        const uniqueAuthors = Array.from(new Set(mappedEditorials.map(e => e.sourceName).filter(Boolean)));
+        // Group by author and keep only the latest one
+        const latestByAuthor = new Map<string, any>();
+        for (const ed of mappedEditorials) {
+          const author = ed.sourceName?.trim() || "Unknown";
+          if (!latestByAuthor.has(author)) {
+            latestByAuthor.set(author, ed);
+          }
+        }
+        
+        // Convert map values back to array
+        let uniqueEditorials = Array.from(latestByAuthor.values());
+        
+        // Filter strictly to the specified editors for the landing page
+        const allowed = ["dr narayana", "dr. narayana", "dr ramya", "dr. ramya", "dr pradeep", "dr. pradeep"];
+        uniqueEditorials = uniqueEditorials.filter((ed: any) => {
+          const name = (ed.sourceName || "").toLowerCase();
+          return allowed.some(a => name.includes(a));
+        });
+        
+        setEditorials(uniqueEditorials);
+        
+        const uniqueAuthors = Array.from(new Set(uniqueEditorials.map(e => e.sourceName).filter(Boolean)));
         
         if (uniqueAuthors.length > 0) {
           try {
@@ -395,7 +464,8 @@ export default function App() {
       const { data, error } = await supabase
         .from('clinical_insights')
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(6);
 
       let finalData = data;
       if (!data || data.length === 0) {
@@ -405,37 +475,44 @@ export default function App() {
           .select('*')
           .eq('category', 'Clinical Insights')
           .eq('status', 'published')
-          .order('created_at', { ascending: false });
+          .order('created_at', { ascending: false })
+          .limit(6);
         finalData = artData;
       }
 
       if (finalData && finalData.length > 0) {
-        const authorsMap: Record<string, any> = {
-          "Advances in Continuous Glucose Monitoring (CGM) for Type 2 Diabetes Management": { name: 'Dr. Priya Nair', qual: 'MBBS, MD (General Medicine), DM (Endocrinology)', title: 'Consultant Endocrinologist & Diabetologist', image: 'https://randomuser.me/api/portraits/women/44.jpg' },
-          "Redefining HFpEF Management: From Diagnostic Dilemmas to Targeted Phenotype-Driven Pharmacotherapy": { name: 'Dr. Arjun Sharma', qual: 'MBBS, MD (General Medicine), DM (Cardiology)', title: 'Consultant Cardiologist', image: 'https://randomuser.me/api/portraits/men/32.jpg' },
-          "Optimizing Disease-Modifying Therapy in Early-Stage Alzheimer's Disease: Biomarker Protocols, Amyloid-Related Imaging Abnormalities (ARIA), and Practical Management Algorithms": { name: 'Dr. Rahul Mehta', qual: 'MBBS, MD (General Medicine), DM (Neurology)', title: 'Consultant Neurologist', image: 'https://randomuser.me/api/portraits/men/45.jpg' },
-          "SGLT2 Inhibitors and Non-Diabetic Chronic Kidney Disease: Redefining Renal Protection and Clinical Pathways": { name: 'Dr. Sneha Iyer', qual: 'MBBS, MD (General Medicine), DM (Nephrology)', title: 'Consultant Nephrologist', image: 'https://randomuser.me/api/portraits/women/68.jpg' },
-          "Paradigm Shift in MASH Management: Integrating Targeted Pharmacotherapy and Incretin Agonists into Gastroenterology Practice": { name: 'Dr. Vikram Reddy', qual: 'MBBS, MD (General Medicine), DM (Gastroenterology)', title: 'Consultant Gastroenterologist', image: 'https://randomuser.me/api/portraits/men/22.jpg' },
-          "Redefining the HER2 Paradigm: Clinical Insights into Antibody-Drug Conjugates for HER2-Low Metastatic Breast Cancer": { name: 'Dr. Ananya Banerjee', qual: 'MBBS, MD (General Medicine), DM (Medical Oncology)', title: 'Consultant Medical Oncologist', image: 'https://randomuser.me/api/portraits/women/33.jpg' },
-          "Navigating Relapsed/Refractory Multiple Myeloma: The Paradigm Shift Towards Bispecific T-Cell Engagers and CAR-T Therapies": { name: 'Dr. Karthik Rao', qual: 'MBBS, MD (General Medicine), DM (Clinical Hematology)', title: 'Consultant Hematologist', image: 'https://randomuser.me/api/portraits/men/55.jpg' },
-          "Resetting the Autoreactive Immune Memory: CD19-Targeted CAR-T Cell Therapy and B-Cell Depletion Paradigms in Refractory Systemic Lupus Erythematosus": { name: 'Dr. Meera Joshi', qual: 'MBBS, MD (General Medicine), DM (Clinical Immunology & Rheumatology)', title: 'Consultant Rheumatologist', image: 'https://randomuser.me/api/portraits/women/29.jpg' },
-          "Navigating Phenotypic Heterogeneity in Severe Refractory Asthma: Precision Biologic Selection and Biomarker Integration": { name: 'Dr. Sandeep Kulkarni', qual: 'MBBS, MD (General Medicine), DM (Pulmonary, Critical Care & Sleep Medicine)', title: 'Consultant Pulmonologist', image: 'https://randomuser.me/api/portraits/men/66.jpg' },
-          "First-Line Whole Genome Sequencing in Undiagnosed Genetic Disorders: Shifting the Paradigm from Diagnostic Odysseys to Precision Medicine": { name: 'Dr. Ritu Verma', qual: 'MBBS, MD (General Medicine), DM (Medical Genetics)', title: 'Consultant Medical Geneticist', image: 'https://randomuser.me/api/portraits/women/12.jpg' },
-          "Paradigm Shift in Endourology: Thulium Fiber Laser versus Holmium:YAG Laser in Urolithiasis and BPH Management": { name: 'Dr. Nikhil Desai', qual: 'MBBS, MS (General Surgery), MCh (Urology)', title: 'Consultant Urologist', image: 'https://randomuser.me/api/portraits/men/17.jpg' },
-          "Awake Craniotomy and Intraoperative Functional Mapping: Balancing Oncological Resection with Functional Preservation in Eloquent Cortex Gliomas": { name: 'Dr. Pooja Kapoor', qual: 'MBBS, MS (General Surgery), MCh (Neurosurgery)', title: 'Consultant Neurosurgeon', image: 'https://randomuser.me/api/portraits/women/55.jpg' },
-          "Evolving Paradigms in Mitral Valve Repair: Minimally Invasive Thoracoscopic vs. Conventional Median Sternotomy Approaches": { name: 'Dr. Ajay Menon', qual: 'MBBS, MS (General Surgery), MCh (Cardiothoracic & Vascular Surgery)', title: 'Consultant Cardiothoracic Surgeon', image: 'https://randomuser.me/api/portraits/men/19.jpg' },
-          "Navigating Organ Preservation in Locally Advanced Rectal Cancer: A Surgical Oncologist’s Perspective on Total Neoadjuvant Therapy and the Watch-and-Wait Protocol": { name: 'Dr. Kavita Patil', qual: 'MBBS, MS (General Surgery), MCh (Surgical Oncology)', title: 'Consultant Surgical Oncologist', image: 'https://randomuser.me/api/portraits/women/22.jpg' },
-          "Targeted Muscle Reinnervation (TMR) and Regenerative Peripheral Nerve Interfaces (RPNI): Paradigm Shifts in Neuroma Prevention and Amputee Rehabilitation": { name: 'Dr. Rohit Chandra', qual: 'MBBS, MS (General Surgery), MCh (Plastic & Reconstructive Surgery)', title: 'Consultant Plastic & Reconstructive Surgeon', image: 'https://randomuser.me/api/portraits/men/12.jpg' },
-          "Navigating the Paradigm Shift in Pediatric Developmental and Epileptic Encephalopathies: From Anti-Seizure Medications to Precision Disease-Modifying Therapies": { name: 'Dr. Neha Gupta', qual: 'MBBS, MD (Pediatrics), DM (Pediatric Neurology)', title: 'Consultant Pediatric Neurologist', image: 'https://randomuser.me/api/portraits/women/61.jpg' },
-          "Navigating Carbapenem-Resistant Enterobacterales (CRE) Infections: Newer Beta-Lactam/Beta-Lactamase Inhibitor Combinations and Stewardship Strategies": { name: 'Dr. Harish Bhat', qual: 'MBBS, MD (General Medicine), DM (Infectious Diseases)', title: 'Consultant Infectious Disease Specialist', image: 'https://randomuser.me/api/portraits/men/77.jpg' },
-          "Navigating DOAC Dosing Dilemmas in Extreme Obesity and End-Stage Kidney Disease: A Pharmacokinetic and Pharmacodynamic Paradigm Shift": { name: 'Dr. Shalini Krishnan', qual: 'MBBS, MD (General Medicine), DM (Clinical Pharmacology)', title: 'Consultant Clinical Pharmacologist', image: 'https://randomuser.me/api/portraits/women/88.jpg' },
-          "Navigating Heterogeneity in Septic Shock: Phenotype-Driven Resuscitation and Hemodynamic Tailoring in the Modern ICU": { name: 'Dr. Vivek Agarwal', qual: 'MBBS, MD (General Medicine), DM (Critical Care Medicine)', title: 'Consultant Intensivist & Critical Care Specialist', image: 'https://randomuser.me/api/portraits/men/91.jpg' },
-          "Genicular Artery Embolization (GAE) in Knee Osteoarthritis: Clinical Efficacy, Technical Nuances, and Practice Takeaways": { name: 'Dr. Aditi Singh', qual: 'MBBS, MD (Radiodiagnosis), Fellowship in Interventional Radiology', title: 'Consultant Interventional Radiologist', image: 'https://randomuser.me/api/portraits/women/90.jpg' }
-        };
+        const articleIds = finalData.map((d: any) => d.id);
+        let profilesMap: Record<string, any> = {};
+
+        if (articleIds.length > 0) {
+          try {
+            const profilesRes = await fetch('/api/profiles');
+            if (profilesRes.ok) {
+              const profilesData = await profilesRes.json();
+              profilesData.forEach((p: any) => {
+                profilesMap[p.id] = p;
+                if (p.email) profilesMap[p.email.toLowerCase().trim()] = p;
+                if (p.name) profilesMap[p.name.toLowerCase().trim()] = p;
+              });
+            }
+          } catch (e) {
+            console.error("Failed to fetch profiles", e);
+          }
+        }
 
         const mappedInsights = finalData.map((insightData: any) => {
           const headline = insightData.article_title || insightData.headline;
-          const mappedAuthor = authorsMap[headline];
+          
+          let mappedAuthor = null;
+          if (insightData.author_ids && Array.isArray(insightData.author_ids) && insightData.author_ids.length > 0) {
+            mappedAuthor = profilesMap[insightData.author_ids[0]];
+          }
+          if (!mappedAuthor && insightData.created_by_email) {
+            mappedAuthor = profilesMap[insightData.created_by_email.toLowerCase().trim()];
+          }
+          if (!mappedAuthor && insightData.author_name) {
+            mappedAuthor = profilesMap[insightData.author_name.toLowerCase().trim()];
+          }
 
           return {
             id: insightData.id,
@@ -447,10 +524,10 @@ export default function App() {
             publishedAt: insightData.created_at || insightData.published_at || new Date().toISOString(),
             status: 'published',
             sourceName: 'HealicWire Experts Board',
-            author_name: mappedAuthor ? mappedAuthor.name : insightData.author_name,
-            author_qualifications: mappedAuthor ? mappedAuthor.qual : insightData.author_qualifications,
-            author_title: mappedAuthor ? mappedAuthor.title : insightData.author_title,
-            author_image: mappedAuthor ? mappedAuthor.image : "https://randomuser.me/api/portraits/women/44.jpg"
+            author_name: mappedAuthor ? mappedAuthor.name : insightData.author_name || "HealicWire Expert",
+            author_qualifications: mappedAuthor ? mappedAuthor.degree : insightData.author_qualifications,
+            author_title: mappedAuthor ? mappedAuthor.role : insightData.author_title,
+            author_image: mappedAuthor && mappedAuthor.avatar_url ? mappedAuthor.avatar_url : "https://randomuser.me/api/portraits/women/44.jpg"
           } as Article & { author_image?: string };
         });
 
@@ -620,7 +697,14 @@ export default function App() {
           ref={scrollRef}
           className="flex overflow-x-auto snap-x snap-mandatory gap-4 pb-2 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
         >
-          {editorials.map((editorial, idx) => {
+          {[...editorials]
+            .sort((a, b) => new Date(b.publishedAt || (b as any).created_at || 0).getTime() - new Date(a.publishedAt || (a as any).created_at || 0).getTime())
+            .filter((editorial, index, self) => {
+              const normalize = (name: string) => name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+              return index === self.findIndex((t) => (
+                normalize(t.sourceName || "Dr. K. Narayana K") === normalize(editorial.sourceName || "Dr. K. Narayana K")
+              ));
+            }).map((editorial, idx) => {
             const profile = editorialProfiles[editorial.sourceName || ''];
             return (
               <div 
@@ -722,7 +806,7 @@ export default function App() {
       <div>
         <div className="flex items-center justify-between gap-3 mb-3">
           <div 
-            className="flex items-center gap-3 cursor-pointer group"
+            className="flex items-center gap-3 mb-3 cursor-pointer group"
             onClick={() => setCurrentTab('clinical-insights')}
           >
             <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wider font-mono shrink-0 group-hover:text-teal-600 transition-colors">Clinical Insights</h3>
@@ -757,7 +841,7 @@ export default function App() {
           {clinicalInsights.map((insight, idx) => (
             <div 
               key={insight.id || idx}
-              className="min-w-[300px] sm:min-w-[380px] w-full max-w-full bg-white dark:bg-zinc-950 p-4 rounded-xl border border-teal-200/80 dark:border-teal-800/80 shadow-sm space-y-3 font-sans cursor-pointer group hover:border-teal-500 transition-all snap-center shrink-0 flex flex-col" 
+              className="min-w-full w-full max-w-full bg-white dark:bg-zinc-950 p-4 rounded-xl border border-teal-200/80 dark:border-teal-800/80 shadow-sm space-y-3 font-sans cursor-pointer group hover:border-teal-500 transition-all snap-center shrink-0 flex flex-col" 
               onClick={() => setCurrentTab('clinical-insights')}
             >
               {/* Author Profile Banner - Integrated inside the box */}
@@ -885,8 +969,7 @@ export default function App() {
         </div>
       )}
 
-      {/* BANNER MARQUEE (Global Display) */}
-      <BannerMarquee />
+      {/* BANNER MARQUEE REMOVED AS PER USER REQUEST */}
 
       {/* MAIN CONTENT PORT */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
@@ -900,40 +983,35 @@ export default function App() {
             onRefreshArticle={handleRefreshArticleDetail}
           />
         ) : portalPageSlug && portalPageSection ? (
-          /* Render Generated Portal / Specialty Page */
-          <PortalPage 
-            section={portalPageSection} 
-            slug={portalPageSlug} 
-            onBack={() => setCurrentTab(portalPageSection === "pages" ? "news" : portalPageSection)} 
-          />
+          <div>Not Found</div>
         ) : currentTab === "editorials" ? (
           /* Render Editorials Page */
           <EditorialsPage onSelectArticle={setSelectedArticle} />
         ) : currentTab === "clinical-insights" ? (
           /* Render Clinical Insights Page */
           <ClinicalInsightsPage onSelectArticle={setSelectedArticle} />
+        ) : currentTab === "living-guidelines" ? (
+          <LivingGuidelines onSelectArticle={setSelectedArticle} />
         ) : currentTab === "guidelines" ? (
-          /* Render Current Guidelines */
-          <LivingGuidelines />
+          <LivingGuidelines title="Clinical Guidelines" subtitle="Evidence-based protocols and consensus statements" onSelectArticle={setSelectedArticle} />
+        ) : currentTab === "pathways" ? (
+          <LivingGuidelines title="Clinical Pathways" subtitle="Standardized care processes and treatment algorithms" onSelectArticle={setSelectedArticle} />
+        ) : currentTab === "treatment-updates" ? (
+          <LivingGuidelines tableName="treatment_update" title="Treatment Updates" subtitle="Latest drug approvals, new indications, and therapeutic advancements" onSelectArticle={setSelectedArticle} />
         ) : currentTab === "pharma-drugs" ? (
-          /* Render Pharma and Drugs Intelligence */
           <LivingGuidelines 
+            tableName="drugs"
             title="Pharma & Drugs Intelligence" 
             subtitle="CDSCO drug advisories, FDA safety warnings, bioequivalence parameters, and novel therapeutic molecule approvals." 
+            onSelectArticle={setSelectedArticle}
           />
         ) : currentTab === "alerts" ? (
           /* Render Hospital Alerts */
           <HospitalIntelligence />
-        ) : currentTab === "treatment-updates" ? (
-          /* Render Clinical Treatment Updates */
-          <LivingGuidelines 
-            title="Clinical Treatment Updates" 
-            subtitle="Real-time clinical protocols, dosage changes, and therapeutic advancements for evidence-based patient care." 
-          />
-        ) : currentTab === "events" ? (
+        ) : currentTab === "scientific-events" ? (
           /* Render Scientific Events or Specific Event Page */
           eventPageSlug ? (
-            <ScientificEventPage slug={eventPageSlug} onBack={() => setCurrentTab("events")} />
+            <div>Not Found</div>
           ) : (
             <ErrorBoundary><ScientificEvents /></ErrorBoundary>
           )
@@ -948,7 +1026,17 @@ export default function App() {
           <RepositoryPage />
         ) : (
           /* Render Interactive News Feed (Comfortable/Compact layouts) */
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="space-y-6 sm:space-y-8 animate-fadeIn mb-8">
+            {!searchQuery && (
+              <HeroSection 
+                onArticleSelect={setSelectedArticle}
+                savedArticleIds={savedArticleIds}
+                onToggleSave={handleToggleSave}
+                editorials={editorials}
+                clinicalInsights={clinicalInsights}
+              />
+            )}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             
             {/* Feed area (Left 2 columns) */}
             <div className="lg:col-span-2 space-y-6 sm:space-y-8">
@@ -974,42 +1062,6 @@ export default function App() {
                   {/* 1. Comfortable/Compact View Rendering */}
                   {viewMode === "comfortable" ? (
                     <div className="space-y-6">
-                      {/* Lead Story Featured layout */}
-                      {leadStory && !searchQuery && (
-                        <div
-                          id={`lead-story-${leadStory.id}`}
-                          onClick={() => setSelectedArticle(leadStory)}
-                          className="group relative rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-850 bg-white dark:bg-zinc-950 shadow-sm hover:shadow-md hover:border-teal-500/30 transition-all duration-200 cursor-pointer grid grid-cols-1 md:grid-cols-2"
-                        >
-                          <div className="aspect-[16/10] md:aspect-auto relative w-full bg-zinc-100 dark:bg-zinc-900 overflow-hidden border-b md:border-b-0 md:border-r border-zinc-200 dark:border-zinc-900">
-                            <img src={leadStory.imageUrl} alt={leadStory.headline} referrerPolicy="no-referrer" className="object-cover w-full h-full group-hover:scale-102 transition-transform duration-300" />
-                            <div className="absolute top-3 left-3 flex flex-col gap-1.5">
-                              <span className="text-[9.5px] font-mono font-semibold px-2 py-0.5 rounded bg-teal-600 text-white shadow-sm uppercase tracking-wider">
-                                Featured Lead Intel
-                              </span>
-                            </div>
-                          </div>
-                          <div className="p-6 flex flex-col justify-between">
-                            <div>
-                              <div className="flex items-center space-x-2 text-[10px] font-mono text-teal-600 dark:text-teal-400 uppercase tracking-widest mb-2.5">
-                                <span>{leadStory.category}</span>
-                                <span>•</span>
-                                <span>{new Date(leadStory.publishedAt).toLocaleDateString("en-IN", { month: "short", year: "numeric" })}</span>
-                              </div>
-                              <h3 className="text-base sm:text-lg font-bold text-zinc-900 dark:text-white leading-snug group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors mb-2 line-clamp-3">
-                                {leadStory.headline}
-                              </h3>
-                              <p className="text-xs text-zinc-650 dark:text-zinc-400 leading-relaxed line-clamp-4 font-sans font-medium mb-4">
-                                {leadStory.summary30s}
-                              </p>
-                            </div>
-                            <div className="flex items-center justify-between border-t border-zinc-100 dark:border-zinc-900 pt-3 text-[10.5px] font-mono text-zinc-400">
-                              <span>Source: <strong>{leadStory.sourceName}</strong></span>
-                              <span className="shrink-0">{leadStory.readingTimeMinutes}m read</span>
-                            </div>
-                          </div>
-                        </div>
-                      )}
 
 
                       {/* Mobile Layout Override: Specific ordering requested by user */}
@@ -1030,12 +1082,14 @@ export default function App() {
                                   viewMode="comfortable"
                                   isSaved={savedArticleIds.includes(storiesToDisplay[0].id)}
                                   onToggleSave={handleToggleSave}
+                                  featured={true}
                                 />
                               </div>
                             );
                           }
                           return null;
                         })()}
+
 
                         {/* 4. Editorial and 5. Clinical Insights */}
                         <div className="space-y-8 py-2">
@@ -1168,15 +1222,17 @@ export default function App() {
                           return (
                             <>
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                {visibleStories.map(art => (
-                                  <ArticleCard
-                                    key={art.id}
-                                    article={art}
-                                    onSelect={setSelectedArticle}
-                                    viewMode="comfortable"
-                                    isSaved={savedArticleIds.includes(art.id)}
-                                    onToggleSave={handleToggleSave}
-                                  />
+                                {visibleStories.map((art, idx) => (
+                                  <div key={art.id} className={idx === 0 ? "md:col-span-2" : ""}>
+                                    <ArticleCard
+                                      article={art}
+                                      onSelect={setSelectedArticle}
+                                      viewMode="comfortable"
+                                      isSaved={savedArticleIds.includes(art.id)}
+                                      onToggleSave={handleToggleSave}
+                                      featured={idx === 0}
+                                    />
+                                  </div>
                                 ))}
                               </div>
 
@@ -1253,6 +1309,9 @@ export default function App() {
                 {/* CLINICAL INSIGHTS SECTION WITH PHOTO & EDITOR INFORMATION */}
                 {renderClinicalInsightsSection(desktopClinicalInsightsScrollRef)}
               </div>
+
+              {/* FACTCHECK WIDGET */}
+              <FactCheckWidget />
 
               {/* TODAY'S CLINICAL BRIEFING */}
               <div className="bg-white dark:bg-zinc-950 p-5 rounded-xl border border-zinc-200 dark:border-zinc-850 shadow-sm space-y-4">
@@ -1370,11 +1429,6 @@ export default function App() {
                 )}
               </div>
 
-              {/* REPOSITORY ITEMS SLIDER (CMS CONFIGURED) */}
-              <div className="mb-6">
-                <RepositorySlider />
-              </div>
-
               {/* WHAT WE DO INTERACTIVE SLIDER */}
               <WhatWeDoSlider
                 onSelectTab={(tabKey) => {
@@ -1396,6 +1450,7 @@ export default function App() {
               </div>
             </div>
 
+          </div>
           </div>
         )}
       </main>

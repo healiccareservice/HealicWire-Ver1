@@ -16,6 +16,7 @@ interface ClinicalInsightsPageProps {
 export default function ClinicalInsightsPage({ onSelectArticle }: ClinicalInsightsPageProps) {
   const [insights, setInsights] = useState<Article[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [profiles, setProfiles] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
   const [expandedIds, setExpandedIds] = useState<string[]>([]);
   const [savedIds, setSavedIds] = useState<string[]>(() => {
@@ -35,7 +36,7 @@ export default function ClinicalInsightsPage({ onSelectArticle }: ClinicalInsigh
         const { data, error } = await supabase
           .from('clinical_insights')
           .select('*')
-          .order('published_at', { ascending: false });
+          .order('created_at', { ascending: false });
         
         let finalData = data;
         if (!data || data.length === 0) {
@@ -71,10 +72,54 @@ export default function ClinicalInsightsPage({ onSelectArticle }: ClinicalInsigh
             "Navigating Heterogeneity in Septic Shock: Phenotype-Driven Resuscitation and Hemodynamic Tailoring in the Modern ICU": { name: 'Dr. Vivek Agarwal', qual: 'MBBS, MD (General Medicine), DM (Critical Care Medicine)', title: 'Consultant Intensivist & Critical Care Specialist', image: 'https://randomuser.me/api/portraits/men/91.jpg' },
             "Genicular Artery Embolization (GAE) in Knee Osteoarthritis: Clinical Efficacy, Technical Nuances, and Practice Takeaways": { name: 'Dr. Aditi Singh', qual: 'MBBS, MD (Radiodiagnosis), Fellowship in Interventional Radiology', title: 'Consultant Interventional Radiologist', image: 'https://randomuser.me/api/portraits/women/90.jpg' }
           };
+          
+          let fetchedProfiles: Record<string, any> = {};
+          try {
+            const profilesRes = await fetch('/api/profiles');
+            if (profilesRes.ok) {
+              const profiles = await profilesRes.json();
+              const normalizeName = (name: string) => (name || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+              profiles.forEach((p: any) => {
+                fetchedProfiles[p.id] = p;
+                if (p.name) fetchedProfiles[normalizeName(p.name)] = p;
+                if (p.email) fetchedProfiles[p.email.toLowerCase().trim()] = p;
+              });
+              setProfiles(fetchedProfiles);
+            }
+          } catch (e) {
+            console.error("Failed to fetch profiles", e);
+          }
 
           const mapped = finalData.map((d: any) => {
             const headline = d.article_title || d.headline;
+            
+            let authorName = null;
+            let dbProfile = null;
+            
+            if (d.author_ids && Array.isArray(d.author_ids) && d.author_ids.length > 0) {
+              dbProfile = fetchedProfiles[d.author_ids[0]];
+            }
+            if (!dbProfile && d.created_by_email) {
+              dbProfile = fetchedProfiles[d.created_by_email.toLowerCase().trim()];
+            }
+            if (!dbProfile && d.author_name) {
+              const normalizeLocal = (n: string) => (n || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+              dbProfile = fetchedProfiles[normalizeLocal(d.author_name)];
+            }
+            
+            if (dbProfile) {
+              authorName = dbProfile.name;
+            }
+            
             const mappedAuthor = authorsMap[headline];
+            if (!authorName) {
+              authorName = mappedAuthor ? mappedAuthor.name : d.author_name;
+            }
+            
+            if (!dbProfile && authorName) {
+              const normalizeLocal = (n: string) => (n || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+              dbProfile = fetchedProfiles[normalizeLocal(authorName)];
+            }
 
             const formatList = (field: any, isNumbered: boolean) => {
               if (!field) return "";
@@ -94,7 +139,7 @@ export default function ClinicalInsightsPage({ onSelectArticle }: ClinicalInsigh
               return arr.map((item, idx) => {
                 let clean = item.trim();
                 if (!clean) return "";
-                if (clean.startsWith('-') || /^\d+\./.test(clean)) {
+                if (/^[-*]\s*/.test(clean) || /^\d+\.\s*/.test(clean)) {
                   clean = clean.replace(/^[-*]\s*/, '').replace(/^\d+\.\s*/, '');
                 }
                 return isNumbered ? `${idx + 1}. ${clean}` : `- ${clean}`;
@@ -130,13 +175,15 @@ export default function ClinicalInsightsPage({ onSelectArticle }: ClinicalInsigh
               status: 'published',
               sourceName: 'HealicWire Experts Board',
               isEditorial: true,
-              author_name: mappedAuthor ? mappedAuthor.name : d.author_name,
-              author_qualifications: mappedAuthor ? mappedAuthor.qual : d.author_qualifications,
-              author_title: mappedAuthor ? mappedAuthor.title : d.author_title,
-              author_image: mappedAuthor ? mappedAuthor.image : "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=400&q=80"
+              imageUrl: d.image_url,
+              author_name: authorName,
+              author_qualifications: dbProfile?.degree || (mappedAuthor ? mappedAuthor.qual : d.author_qualifications),
+              author_title: dbProfile?.role || (mappedAuthor ? mappedAuthor.title : d.author_title),
+              author_image: dbProfile?.avatar_url || (mappedAuthor ? mappedAuthor.image : "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=400&q=80")
             } as Article & { author_image?: string };
           });
-          setInsights(mapped);
+          const sortedMapped = mapped.sort((a: any, b: any) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
+          setInsights(sortedMapped);
         }
       } catch (err) {
         console.error("Error loading clinical insights:", err);
@@ -264,13 +311,13 @@ export default function ClinicalInsightsPage({ onSelectArticle }: ClinicalInsigh
                   />
                   <div className="space-y-1.5 text-center sm:text-left flex-1">
                     <h2 className="text-lg font-extrabold text-zinc-900 dark:text-white">
-                      {ed.author_name || "Dr. Priya Nair"}
+                      {ed.author_name || "Unknown Author"}
                     </h2>
                     <p className="text-xs font-mono text-zinc-600 dark:text-zinc-400 font-semibold tracking-wide">
-                      {ed.author_qualifications || "MBBS, MD (General Medicine), DM (Endocrinology)"}
+                      {ed.author_qualifications || ""}
                     </p>
                     <p className="text-sm font-sans text-teal-700 dark:text-teal-400 font-bold">
-                      {ed.author_title || "Consultant Endocrinologist & Diabetologist"}
+                      {ed.author_title || ""}
                     </p>
                   </div>
                 </div>
@@ -301,6 +348,16 @@ export default function ClinicalInsightsPage({ onSelectArticle }: ClinicalInsigh
                       <span>{new Date(ed.publishedAt || Date.now()).toLocaleDateString("en-IN")}</span>
                     </div>
                   </div>
+
+                  {ed.imageUrl && (
+                    <div className="w-full mt-4 mb-2 overflow-hidden rounded-xl bg-zinc-100 dark:bg-zinc-900 aspect-video relative">
+                      <img 
+                        src={ed.imageUrl} 
+                        alt={ed.headline} 
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
+                  )}
 
                   {/* Headline */}
                   <h2

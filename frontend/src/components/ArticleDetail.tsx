@@ -308,7 +308,7 @@ export default function ArticleDetail({
           {(article.category === "Clinical Insights" || article.author_name) && (
             <div className="p-6 mb-6 rounded-2xl bg-gradient-to-r from-teal-900/10 via-emerald-900/10 to-cyan-900/10 dark:from-teal-950/50 dark:via-emerald-950/50 dark:to-cyan-950/50 border border-teal-200/80 dark:border-teal-800/80 shadow-xs flex flex-col sm:flex-row items-center sm:items-start gap-5">
               <img
-                src="https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=400&q=80"
+                src={article.author_avatar_url || "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=400&q=80"}
                 alt={article.author_name || "Dr. Priya Nair"}
                 className="w-20 h-20 rounded-full object-cover border-3 border-teal-600 shadow-md shrink-0"
               />
@@ -328,6 +328,20 @@ export default function ArticleDetail({
 
           {/* Article Header Metadata */}
           <div>
+            {/* Featured Image */}
+            {article.imageUrl && (
+              <div className="mb-6">
+                <div className="rounded-xl overflow-hidden aspect-[16/9] w-full bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-850 mb-2">
+                  <img onError={(e) => { e.currentTarget.parentElement!.parentElement!.style.display = 'none'; }} src={article.imageUrl} alt={article.headline} referrerPolicy="no-referrer" className="object-contain w-full h-full" />
+                </div>
+                {(article.imageCredit || article.imageType) && (
+                  <p className="text-[10px] font-mono text-zinc-400 text-right pr-2">
+                    Credit: {article.imageCredit} {article.imageType ? `(${article.imageType})` : ''}
+                  </p>
+                )}
+              </div>
+            )}
+
             <div className="flex flex-wrap items-center gap-2 mb-3">
               <span className="text-xs font-mono font-bold uppercase text-teal-600 dark:text-teal-400 tracking-wider">
                 {article.category}
@@ -349,14 +363,6 @@ export default function ArticleDetail({
             </h1>
             <p className="text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed font-sans font-medium mb-6">
               {article.subhead}
-            </p>
-
-            {/* Featured Image */}
-            <div className="rounded-xl overflow-hidden aspect-[16/9] w-full bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-850 mb-4">
-              <img src={article.imageUrl} alt={article.headline} referrerPolicy="no-referrer" className="object-cover w-full h-full" />
-            </div>
-            <p className="text-[10px] font-mono text-zinc-400 text-right pr-2">
-              Credit: {article.imageCredit} ({article.imageType})
             </p>
           </div>
 

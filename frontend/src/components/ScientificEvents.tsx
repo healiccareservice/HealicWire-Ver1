@@ -8,11 +8,10 @@ import {
   Search, Calendar, MapPin, Laptop, Sparkles, Plus, Clock, 
   Award, CheckCircle, ExternalLink, User, DollarSign, X, AlertCircle, RefreshCw, FileText,
   Filter, Share2, Bookmark, BookmarkCheck, ChevronRight, MessageSquare, BookOpen, Layers,
-  Send, ThumbsUp, Star, ShieldCheck, Download, Trash2, Check, ArrowRight, Compass, Users,
-  GraduationCap, Video, Globe2, Briefcase, ChevronDown, ShieldAlert, Zap, AlertTriangle, Lock
+  Send, ThumbsUp, Star, ShieldCheck, Download, Trash2, Check, ArrowRight, Compass, Users
 } from "lucide-react";
-import { ScientificEvent, EventRegistration, LiveQnAItem, AiSummaryData } from "../types";
-import { supabase, mapEventFromDB, mapArticleFromDB } from "../lib/supabase";
+import { ScientificEvent, EventRegistration, AiSummaryData, Article } from "../types";
+import { supabase, mapEventFromDB } from "../lib/supabase";
 
 export default function ScientificEvents() {
   const [events, setEvents] = useState<ScientificEvent[]>([]);
@@ -82,26 +81,28 @@ export default function ScientificEvents() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
+  const [spotlightEvents, setSpotlightEvents] = useState<ScientificEvent[]>([]);
   const [portalEvents, setPortalEvents] = useState<any[]>([]);
 
   // Fetch events from backend API
-  const fetchEvents = async () => {
+  const fetchEvents = () => {
     setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('scientific_events')
-        .select('*');
-      if (error) throw error;
-      if (data) {
-        const mapped = data.map(mapEventFromDB);
-        setEvents(mapped.filter((e: any) => e.managed === 'Not Managed' || !e.managed));
-        setPortalEvents(mapped.filter((e: any) => e.managed === 'Managed'));
-      }
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
+    supabase.from('scientific_events').select('*')
+      .then(({ data, error }) => {
+        if (!error && data) {
+          const mapped = data.map(mapEventFromDB);
+          setEvents(mapped);
+          setPortalEvents(mapped);
+        }
+        setLoading(false);
+      });
+
+    supabase.from('scientific_events').select('*').eq('spotlight', true)
+      .then(({ data, error }) => {
+        if (!error && data) {
+          setSpotlightEvents(data.map(mapEventFromDB));
+        }
+      });
   };
 
   useEffect(() => {
@@ -224,13 +225,9 @@ export default function ScientificEvents() {
     setAiChatLoading(true);
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch(`/api/scientific-events/${aiAssistantEvent.id}/ai-assistant`, {
         method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          "Authorization": session ? `Bearer ${session.access_token}` : ""
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question: q })
       });
       const data = await res.json();
@@ -250,13 +247,7 @@ export default function ScientificEvents() {
 
     setAiSummaryLoading(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(`/api/scientific-events/${event.id}/ai-summary`, { 
-        method: "POST",
-        headers: {
-          "Authorization": session ? `Bearer ${session.access_token}` : ""
-        }
-      });
+      const res = await fetch(`/api/scientific-events/${event.id}/ai-summary`, { method: "POST" });
       const data = await res.json();
       setAiSummaryData(data);
       setEvents(prev => prev.map(e => e.id === event.id ? { ...e, aiSummary: data } : e));
@@ -361,7 +352,7 @@ export default function ScientificEvents() {
           <img 
             src={evt.imageUrl || "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=800&q=80"} 
             alt={evt.title}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+            className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/40 to-transparent" />
 
@@ -544,35 +535,42 @@ export default function ScientificEvents() {
         </p>
       </div>
 
-      {/* GENERATED SCIENTIFIC EVENTS - ALWAYS ON TOP BELOW HEADER */}
-      {portalEvents.length > 0 && (
+      {/* SPOTLIGHT SECTION - CONFIGURED VIA SPOTLIGHT MS */}
+      {spotlightEvents.length > 0 && (
         <div className="mb-8 p-6 rounded-2xl bg-gradient-to-r from-purple-900/10 via-indigo-900/10 to-blue-900/10 dark:from-purple-950/40 dark:via-indigo-950/40 dark:to-blue-950/40 border border-purple-200 dark:border-purple-800/60 shadow-xs space-y-4 font-sans">
           <div className="flex items-center justify-between border-b border-purple-200/60 dark:border-purple-800/40 pb-3">
             <div className="flex items-center space-x-2.5">
               <Sparkles className="w-5 h-5 text-purple-600 dark:text-purple-400 animate-pulse shrink-0" />
               <div>
                 <h2 className="text-base font-extrabold text-zinc-900 dark:text-white uppercase font-mono tracking-tight">
-                  Managed Events & Symposia
+                  Spotlight
                 </h2>
                 <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                  Published scientific events & portal pages generated via HealicWire Control Panel.
+                  Critical updates and spotlight scientific events.
                 </p>
               </div>
             </div>
 
             <span className="px-2.5 py-1 rounded-full text-[10px] font-mono font-bold bg-purple-600 text-white uppercase tracking-wider shrink-0">
-              Top Priority Events ({portalEvents.length})
+              Spotlight ({spotlightEvents.length})
             </span>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {portalEvents.map(pEvt => (
+            {spotlightEvents.slice(0, 2).map(pEvt => (
               <div
                 key={pEvt.id}
-                className="bg-white dark:bg-zinc-950 p-5 rounded-xl border border-purple-200/80 dark:border-purple-800/80 shadow-2xs hover:shadow-md transition-all flex flex-col justify-between"
+                onClick={() => setSelectedEvent(pEvt)}
+                className="bg-white dark:bg-zinc-950 rounded-xl border border-purple-200/80 dark:border-purple-800/80 shadow-2xs hover:shadow-md transition-all flex flex-col overflow-hidden cursor-pointer"
               >
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
+                {pEvt.imageUrl && (
+                  <div className="w-full h-40 bg-zinc-100 dark:bg-zinc-900">
+                    <img src={pEvt.imageUrl} alt={pEvt.title} className="w-full h-full object-contain" />
+                  </div>
+                )}
+                <div className="p-5 flex-1 flex flex-col justify-between">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
                     <span className="px-2.5 py-0.5 rounded text-[9.5px] font-mono font-bold bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 uppercase">
                       {pEvt.eventType || "Scientific Event"}
                     </span>
@@ -586,25 +584,21 @@ export default function ScientificEvents() {
                   </h3>
 
                   <p className="text-xs text-zinc-600 dark:text-zinc-400 line-clamp-2 leading-relaxed">
-                    {pEvt.description}
+                    {pEvt.aiSummary?.executiveSummary || pEvt.whyAttend || pEvt.description || "Join healthcare professionals in this medical conference."}
                   </p>
+                  </div>
                 </div>
 
                 <div className="mt-4 pt-3 border-t border-zinc-100 dark:border-zinc-900 flex items-center justify-between text-xs">
                   <div className="flex items-center space-x-1.5 text-[11px] text-zinc-500 font-mono">
                     <Award className="w-3.5 h-3.5 text-amber-500" />
-                    <span>{pEvt.cmeCredits || 12} CME Credits</span>
+                    <span>{pEvt.cmeCredits || 0} CME Credits</span>
                   </div>
-
-                  <button
-                    onClick={() => {
-                      setSelectedEvent(pEvt);
-                    }}
-                    className="px-3.5 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-2xs transition-all flex items-center space-x-1"
-                  >
+                  
+                  <span className="flex items-center space-x-1 text-purple-600 dark:text-purple-400 font-bold hover:underline">
                     <span>View Event Details</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </button>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </span>
                 </div>
               </div>
             ))}
@@ -741,6 +735,14 @@ export default function ScientificEvents() {
           <p className="text-sm text-zinc-600 font-bold mb-1">No scientific events match your criteria</p>
           <button onClick={() => setSearchQuery("")} className="px-4 py-2 bg-teal-700 text-white text-xs font-mono rounded-lg font-bold">Clear Search</button>
         </div>
+      ) : searchQuery ? (
+        <div className="space-y-4">
+          <div className="flex items-center space-x-2 border-b-2 border-teal-600 pb-2">
+            <Search className="w-5 h-5 text-teal-600" />
+            <h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 font-serif">Search Results ({filteredEvents.length})</h2>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">{filteredEvents.map(evt => renderEventCard(evt))}</div>
+        </div>
       ) : (
         <>
           {viewMode === "priority" && (
@@ -839,7 +841,7 @@ export default function ScientificEvents() {
 
             <div className="space-y-6">
               <div className="relative h-48 rounded-xl overflow-hidden bg-zinc-900">
-                <img src={selectedEvent.imageUrl || "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=800&q=80"} alt={selectedEvent.title} className="w-full h-full object-cover opacity-80" />
+                <img src={selectedEvent.imageUrl || "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=800&q=80"} alt={selectedEvent.title} className="w-full h-full object-contain opacity-80" />
                 <div className="absolute bottom-4 left-4 right-4 text-white space-y-1">
                   <span className="px-2.5 py-0.5 rounded bg-teal-600 text-[10px] font-mono font-bold uppercase">{selectedEvent.scope}</span>
                   <h2 className="text-xl sm:text-2xl font-bold font-serif">{selectedEvent.title}</h2>

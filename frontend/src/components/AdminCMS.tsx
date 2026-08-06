@@ -54,6 +54,11 @@ import {
   SlidersHorizontal
 } from "lucide-react";
 import { Article, EvidenceLevel, Region } from "../types";
+import { supabase } from "../lib/supabase";
+import UserProfileEditor from "./UserProfileEditor";
+import ClinicalInsightsMS from "./ClinicalInsightsMS";
+import SpotlightMS from "./SpotlightMS";
+import ImageSelectorModal from "./ImageSelectorModal";
 
 interface AdminCMSProps {
   onClose: () => void;
@@ -70,11 +75,19 @@ export default function AdminCMS({ onClose, session }: AdminCMSProps) {
   };
   const [articles, setArticles] = useState<Article[]>([]);
   const [corrections, setCorrections] = useState<any[]>([]);
+  const [editorials, setEditorials] = useState<any[]>([]);
+  const [clinicalInsights, setClinicalInsights] = useState<any[]>([]);
+  const [spotlightArticles, setSpotlightArticles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [userProfile, setUserProfile] = useState<any>(null);
+  const [showImageSelector, setShowImageSelector] = useState(false);
+  const [imageSelectorTarget, setImageSelectorTarget] = useState<'editorial' | 'edit' | 'generated'>('editorial');
+  const [generatedImageKey, setGeneratedImageKey] = useState<string | null>(null);
+  const [editorialImageTargetId, setEditorialImageTargetId] = useState<string | null>(null);
   
   // Navigation tabs
   const [activeTab, setActiveTab] = useState<
-    "catalog" | "write_editorial" | "generate_news" | "create_pages" | "manage_scientific_events" | "queue" | "corrections" | "advertisements_ms" | "create_scientific_events" | "upload_images"
+    "catalog" | "write_editorial" | "generate_news" | "clinical_insights" | "spotlight" | "manage_scientific_events" | "queue" | "corrections" | "advertisements_ms" | "upload_images" | "profile"
   >("catalog");
 
   // Advertisements MS State
@@ -518,12 +531,13 @@ export default function AdminCMS({ onClose, session }: AdminCMSProps) {
   };
 
   // Generate News Weekly State & Lock Logic
-  const ALL_5_SECTIONS = [
+  const ALL_SECTIONS = [
     { id: "Treatment Update", label: "Treatment Update", icon: Stethoscope, url: "/treatmentupdate" },
     { id: "Scientific Events", label: "Scientific Events", icon: Calendar, url: "/scientificevents" },
     { id: "Pharma and Drugs", label: "Pharma and Drugs", icon: Pill, url: "/pharmadrugs" },
     { id: "Hospital Intelligence", label: "Hospital Intelligence", icon: ShieldAlert, url: "/alerts" },
-    { id: "Current Guidelines", label: "Current Guidelines", icon: BookOpen, url: "/guidelines" }
+    { id: "Current Guidelines", label: "Current Guidelines", icon: BookOpen, url: "/guidelines" },
+    { id: "Health Care Providers", label: "Health Care Providers", icon: User, url: "/providers" }
   ];
 
   const WEEK_OPTIONS = [
@@ -539,12 +553,121 @@ export default function AdminCMS({ onClose, session }: AdminCMSProps) {
     "Scientific Events",
     "Pharma and Drugs",
     "Hospital Intelligence",
-    "Current Guidelines"
+    "Current Guidelines",
+    "Health Care Providers"
   ]);
   const [selectedWeek, setSelectedWeek] = useState<string>("Week 30, 2026");
   const [generatedWeeksMap, setGeneratedWeeksMap] = useState<{ [weekId: string]: string[] }>({});
   const [generatingWeekly, setGeneratingWeekly] = useState(false);
   const [generateWeeklySuccess, setGenerateWeeklySuccess] = useState<string | null>(null);
+  
+  const [newsCounts, setNewsCounts] = useState<{ [key: string]: number }>({});
+  const [generatedSpecialtyNews, setGeneratedSpecialtyNews] = useState<{ [key: string]: any[] }>({});
+  const [editingGeneratedArticle, setEditingGeneratedArticle] = useState<any>(null);
+  const [savingGeneratedArticle, setSavingGeneratedArticle] = useState(false);
+
+  const handleUpdateGeneratedArticle = () => {
+    if (!editingGeneratedArticle) return;
+    setSavingGeneratedArticle(true);
+    fetchWithAuth(`/api/admin/generated-specialty-news/${editingGeneratedArticle.table}/${editingGeneratedArticle.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(editingGeneratedArticle.data)
+    })
+      .then(res => res.json())
+      .then(() => {
+        setSavingGeneratedArticle(false);
+        setEditingGeneratedArticle(null);
+        fetchGeneratedSpecialtyNews();
+      })
+      .catch(err => {
+        console.error(err);
+        setSavingGeneratedArticle(false);
+      });
+  };
+
+  const renderDynamicField = (key: string, value: any) => {
+    const isExcluded = ['id', 'created_at', 'updated_at', 'views', 'views_count', 'registrations_count', 'status', 'slug'].includes(key);
+    if (isExcluded) return null;
+
+    const isImage = key.includes('image') || key.includes('poster') || key.includes('logo');
+    const isObject = typeof value === 'object' && value !== null;
+    const isBoolean = typeof value === 'boolean';
+    const isNumber = typeof value === 'number';
+
+    const handleChange = (newVal: any) => {
+      setEditingGeneratedArticle((prev: any) => ({
+        ...prev,
+        data: { ...prev.data, [key]: newVal }
+      }));
+    };
+
+    return (
+      <div key={key} className="mb-4 border-b border-zinc-100 dark:border-zinc-800/50 pb-4 last:border-0">
+        <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1 capitalize">{key.replace(/_/g, ' ')}</label>
+        
+        {isBoolean ? (
+          <select
+            value={value ? "true" : "false"}
+            onChange={e => handleChange(e.target.value === "true")}
+            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+          >
+            <option value="true">True</option>
+            <option value="false">False</option>
+          </select>
+        ) : isObject ? (
+          <textarea
+            value={typeof value === 'string' ? value : JSON.stringify(value, null, 2)}
+            onChange={e => {
+              try {
+                handleChange(JSON.parse(e.target.value));
+              } catch {
+                handleChange(e.target.value); // Keep as string if invalid JSON during typing
+              }
+            }}
+            rows={4}
+            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg text-sm text-zinc-900 dark:text-white font-mono text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+          />
+        ) : isImage ? (
+          <div>
+            <input
+              type="text"
+              value={value || ""}
+              onChange={e => handleChange(e.target.value)}
+              className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+            />
+            {value && <img src={value} alt="Preview" className="mt-3 h-32 w-full object-cover rounded-lg border border-zinc-200 dark:border-zinc-800" />}
+            <button
+              type="button"
+              onClick={() => {
+                setGeneratedImageKey(key);
+                setImageSelectorTarget('generated');
+                setShowImageSelector(true);
+              }}
+              className="mt-3 w-full py-2 flex items-center justify-center gap-2 border border-zinc-200 dark:border-zinc-800 rounded-lg text-sm text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors"
+            >
+              <ImageIcon className="w-4 h-4" />
+              <span>{value ? 'Change Image' : 'Select Image'}</span>
+            </button>
+          </div>
+        ) : isNumber ? (
+          <input
+            type="number"
+            value={value || 0}
+            onChange={e => handleChange(Number(e.target.value))}
+            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+          />
+        ) : (
+          <textarea
+            value={value || ""}
+            onChange={e => handleChange(e.target.value)}
+            rows={String(value || "").length > 100 ? 3 : 1}
+            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+          />
+        )}
+      </div>
+    );
+  };
 
   const fetchGeneratedWeeks = () => {
     fetchWithAuth("/api/admin/generated-weeks")
@@ -553,9 +676,17 @@ export default function AdminCMS({ onClose, session }: AdminCMSProps) {
       .catch(err => console.error(err));
   };
 
+  const fetchGeneratedSpecialtyNews = () => {
+    fetchWithAuth("/api/admin/generated-specialty-news")
+      .then(res => res.json())
+      .then(data => setGeneratedSpecialtyNews(data || {}))
+      .catch(err => console.error(err));
+  };
+
   useEffect(() => {
     fetchData();
     fetchGeneratedWeeks();
+    fetchGeneratedSpecialtyNews();
   }, []);
 
   const toggleSectionSelection = (secId: string) => {
@@ -565,10 +696,10 @@ export default function AdminCMS({ onClose, session }: AdminCMSProps) {
   };
 
   const toggleSelectAllSections = () => {
-    if (selectedSections.length === ALL_5_SECTIONS.length) {
+    if (selectedSections.length === ALL_SECTIONS.length) {
       setSelectedSections([]);
     } else {
-      setSelectedSections(ALL_5_SECTIONS.map(s => s.id));
+      setSelectedSections(ALL_SECTIONS.map(s => s.id));
     }
   };
 
@@ -594,7 +725,7 @@ export default function AdminCMS({ onClose, session }: AdminCMSProps) {
     fetchWithAuth("/api/admin/generate-weekly-batch", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ selectedWeek, selectedSections })
+      body: JSON.stringify({ selectedWeek, selectedSections, newsCounts })
     })
       .then(res => res.json())
       .then(data => {
@@ -603,6 +734,7 @@ export default function AdminCMS({ onClose, session }: AdminCMSProps) {
           setGenerateWeeklySuccess(data.message);
           setGeneratedWeeksMap(data.generatedWeeks || {});
           fetchData();
+          fetchGeneratedSpecialtyNews();
         } else {
           alert(data.error || "Failed to generate weekly news.");
         }
@@ -624,9 +756,19 @@ export default function AdminCMS({ onClose, session }: AdminCMSProps) {
       })
       .catch(err => console.error(err));
 
+    fetchWithAuth("/api/admin/editorials")
+      .then(res => res.json())
+      .then(data => setEditorials(Array.isArray(data) ? data : []))
+      .catch(err => console.error(err));
+
     fetchWithAuth("/api/admin/corrections")
       .then(res => res.json())
       .then(data => setCorrections(Array.isArray(data) ? data : []))
+      .catch(err => console.error(err));
+
+    fetchWithAuth("/api/admin/clinical_insights")
+      .then(res => res.json())
+      .then(data => setClinicalInsights(Array.isArray(data) ? data : []))
       .catch(err => console.error(err));
 
     fetchWithAuth("/api/admin/event-assets")
@@ -634,7 +776,7 @@ export default function AdminCMS({ onClose, session }: AdminCMSProps) {
       .then(data => setEventAssets(Array.isArray(data) ? data : []))
       .catch(err => console.error(err));
 
-    fetchWithAuth("/api/admin/repository")
+    fetchWithAuth("/api/admin/advertisements")
       .then(res => res.json())
       .then(data => setAdvertisementsList(Array.isArray(data) ? data : []))
       .catch(err => console.error(err));
@@ -643,6 +785,13 @@ export default function AdminCMS({ onClose, session }: AdminCMSProps) {
       .then(res => res.json())
       .then(data => setRepositoryItems(Array.isArray(data) ? data : []))
       .catch(err => console.error(err));
+
+    fetchWithAuth("/api/admin/profile")
+      .then(res => res.json())
+      .then(data => {
+        if (data?.profile) setUserProfile(data.profile);
+      })
+      .catch(console.error);
 
     fetchWithAuth("/api/admin/slider-settings")
       .then(res => res.json())
@@ -688,7 +837,7 @@ export default function AdminCMS({ onClose, session }: AdminCMSProps) {
     setIsAdSubmitting(true);
     setAdSuccessMsg(null);
 
-    const url = editingAdId ? `/api/admin/repository/${editingAdId}` : "/api/admin/repository";
+    const url = editingAdId ? `/api/admin/advertisements/${editingAdId}` : "/api/admin/advertisements";
     const method = editingAdId ? "PUT" : "POST";
 
     fetchWithAuth(url, {
@@ -799,10 +948,12 @@ export default function AdminCMS({ onClose, session }: AdminCMSProps) {
 
   const handleAdDelete = (id: string) => {
     if (!confirm("Are you sure you want to delete this advertisement?")) return;
-    fetchWithAuth(`/api/admin/repository/${id}`, { method: "DELETE" })
+    setIsAdSubmitting(true);
+    fetchWithAuth(`/api/admin/advertisements/${id}`, { method: "DELETE" })
       .then(res => res.json())
       .then(() => fetchData())
-      .catch(err => console.error(err));
+      .catch(err => console.error(err))
+      .finally(() => setIsAdSubmitting(false));
   };
 
   // Helper for available pages created under "Create Pages" (sorted recently created/uploaded on top)
@@ -978,20 +1129,40 @@ export default function AdminCMS({ onClose, session }: AdminCMSProps) {
   // Submit Editorial
   const handleWriteEditorialSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editorialForm.headline.trim() || !editorialForm.summary30s.trim()) return;
+    if (!editorialForm.headline.trim() || !editorialForm.bodyAnalysis.trim()) {
+      alert("Please complete the required fields (Headline and Body Analysis).");
+      return;
+    }
+    
+    // Convert specialties string to array, and add fallback for title
+    const payload = {
+      ...editorialForm,
+      specialties: editorialForm.specialties.split(",").map(s => s.trim()).filter(Boolean),
+      title: editorialForm.headline,
+      sourceName: session?.user?.user_metadata?.name || session?.user?.email || "HealicWire Editorial Board",
+      authorEmail: session?.user?.email,
+    };
+    
+    setEditorialSuccess(null);
+    const isEditMode = Boolean(editingArticle && (editingArticle as any).sourceFeature === 'Editorial');
+    const endpoint = isEditMode ? `/api/admin/editorials/${editingArticle?.id}` : "/api/admin/editorials";
+    const method = isEditMode ? "PUT" : "POST";
 
-    fetchWithAuth("/api/admin/articles", {
-      method: "POST",
+    fetchWithAuth(endpoint, {
+      method,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...editorialForm,
-        specialties: editorialForm.specialties.split(",").map(s => s.trim()),
-        publishedAt: new Date().toISOString()
-      })
+      body: JSON.stringify(payload)
     })
-      .then(res => res.json())
-      .then(data => {
-        setEditorialSuccess(`Successfully published editorial: "${data.headline}"`);
+      .then(res => {
+        if (!res.ok) {
+          return res.json().then(errData => { throw new Error(errData.error || "Failed to save editorial"); });
+        }
+        return res.json();
+      })
+      .then(() => {
+        const actionVerb = isEditMode ? "updated" : "published";
+        setEditorialSuccess(`Editorial successfully ${actionVerb}!`);
+        // Reset form
         setEditorialForm({
           headline: "",
           subhead: "",
@@ -1000,16 +1171,20 @@ export default function AdminCMS({ onClose, session }: AdminCMSProps) {
           region: Region.GLOBAL,
           imageUrl: "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=800&q=80",
           imageCredit: "Editorial Photo / Unsplash",
-          sourceName: "HealicWire Editorial Board",
+          sourceName: session?.user?.user_metadata?.name || session?.user?.email || "HealicWire Editorial Board",
           readingTimeMinutes: 3,
           summary30s: "",
           bodyAnalysis: "",
           clinicalImpactScore: 8,
           status: "published"
         });
+        setEditingArticle(null);
         fetchData();
       })
-      .catch(err => console.error(err));
+      .catch(err => {
+        console.error(err);
+        alert(err.message || "Failed to save editorial");
+      });
   };
 
   // AI Editorial Generation Handler
@@ -1022,44 +1197,45 @@ export default function AdminCMS({ onClose, session }: AdminCMSProps) {
     setAiGeneratingEditorial(true);
     setEditorialSuccess(null);
 
-    fetchWithAuth("/api/admin/ingest", {
+    fetchWithAuth("/api/admin/editorials/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ topic: editorialForm.headline })
+      body: JSON.stringify({ 
+        topic: editorialForm.headline,
+        category: editorialForm.category,
+        authorEmail: session?.user?.email,
+        authorName: userProfile?.name || session?.user?.user_metadata?.name || session?.user?.email || "HealicWire Editorial Board"
+      })
     })
       .then(res => res.json())
       .then(data => {
         setAiGeneratingEditorial(false);
-        if (data.success && data.article) {
+        if (data.error) {
+          alert(`Error generating editorial: ${data.error}`);
+        } else if (data && data.id) {
+          // Setting editingArticle puts the form into edit mode for this auto-saved row
+          setEditingArticle({ ...data, sourceFeature: 'Editorial' });
           setEditorialForm(prev => ({
             ...prev,
-            summary30s: data.article.summary30s || prev.summary30s,
-            bodyAnalysis: data.article.bodyAnalysis || prev.bodyAnalysis,
-            category: data.article.category || prev.category,
-            specialties: data.article.specialties?.join(", ") || prev.specialties,
-            readingTimeMinutes: data.article.readingTimeMinutes || prev.readingTimeMinutes
+            headline: data.headline || prev.headline,
+            subhead: data.subhead || prev.subhead,
+            summary30s: data.summary_30s || prev.summary30s,
+            bodyAnalysis: data.body_analysis || prev.bodyAnalysis,
+            category: data.category || prev.category,
+            specialties: Array.isArray(data.specialties) ? data.specialties.join(", ") : (data.specialties || prev.specialties),
+            readingTimeMinutes: data.reading_time_minutes || prev.readingTimeMinutes,
+            imageUrl: data.image_url || prev.imageUrl,
+            imageCredit: data.image_credit || prev.imageCredit,
+            region: data.region || prev.region
           }));
-          setEditorialSuccess(`✨ AI successfully generated executive summary & analysis for "${editorialForm.headline}"`);
-        } else {
-          // Fallback editorial generator
-          const topic = editorialForm.headline;
-          setEditorialForm(prev => ({
-            ...prev,
-            summary30s: `Executive Clinical Brief: Critical evidence review regarding ${topic}. Outlines key therapeutic implications, guidelines, and risk factors for active practice.`,
-            bodyAnalysis: `CHIEF EDITORIAL ANALYSIS:\n\nRecent scientific publications and clinical guidelines regarding "${topic}" highlight significant shifts in current medical management.\n\n1. Clinical Evidence & Guideline Context:\nEmerging evidence demonstrates measurable outcomes across clinical cohorts. Practitioners should re-evaluate existing dosing protocols, patient selection criteria, and diagnostic monitoring frequencies.\n\n2. Key Practice Takeaways:\n- Implement revised diagnostic screening prior to initiating therapy.\n- Monitor patient tolerance and biomarker responses at 4-week and 12-week intervals.\n- Collaborate across multidisciplinary teams to ensure seamless care transition.\n\nConclusion:\nAdopting evidence-based protocols ensures optimal patient outcomes while mitigating adverse risk factors.`
-          }));
-          setEditorialSuccess(`✨ AI successfully generated executive summary & analysis for "${editorialForm.headline}"`);
+          setEditorialSuccess(`✨ AI successfully generated and saved executive summary & analysis for "${editorialForm.headline}"`);
+          fetchData();
         }
       })
       .catch(err => {
         setAiGeneratingEditorial(false);
-        const topic = editorialForm.headline;
-        setEditorialForm(prev => ({
-          ...prev,
-          summary30s: `Executive Clinical Brief: Critical evidence review regarding ${topic}. Outlines key therapeutic implications, guidelines, and risk factors for active practice.`,
-          bodyAnalysis: `CHIEF EDITORIAL ANALYSIS:\n\nRecent scientific publications and clinical guidelines regarding "${topic}" highlight significant shifts in current medical management.\n\n1. Clinical Evidence & Guideline Context:\nEmerging evidence demonstrates measurable outcomes across clinical cohorts. Practitioners should re-evaluate existing dosing protocols, patient selection criteria, and diagnostic monitoring frequencies.\n\n2. Key Practice Takeaways:\n- Implement revised diagnostic screening prior to initiating therapy.\n- Monitor patient tolerance and biomarker responses at 4-week and 12-week intervals.\n- Collaborate across multidisciplinary teams to ensure seamless care transition.\n\nConclusion:\nAdopting evidence-based protocols ensures optimal patient outcomes while mitigating adverse risk factors.`
-        }));
-        setEditorialSuccess(`✨ AI successfully generated executive summary & analysis for "${editorialForm.headline}"`);
+        console.error(err);
+        alert("Network error generating editorial.");
       });
   };
 
@@ -1174,7 +1350,11 @@ export default function AdminCMS({ onClose, session }: AdminCMSProps) {
   const handleSaveEdit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingArticle) return;
-    fetchWithAuth(`/api/admin/articles/${editingArticle.id}`, {
+
+    const isEditorial = (editingArticle as any).sourceFeature === 'Editorial';
+    const endpoint = isEditorial ? `/api/admin/editorials/${editingArticle.id}` : `/api/admin/articles/${editingArticle.id}`;
+
+    fetchWithAuth(endpoint, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(editingArticle)
@@ -1188,7 +1368,37 @@ export default function AdminCMS({ onClose, session }: AdminCMSProps) {
   };
 
   const ingestedQueue = articles.filter(a => a.status === "ingested");
-  const catalog = articles.filter(a => a.status !== "ingested");
+  const catalog = [
+    ...articles.filter(a => a.status !== "ingested").map(a => ({ ...a, sourceFeature: a.category || 'Global News' })),
+    ...editorials.map(e => ({ ...e, sourceFeature: 'Editorial' })),
+    ...corrections.map(c => ({ ...c, sourceFeature: 'Correction' })),
+  ].sort((a, b) => new Date(b.created_at || Date.now()).getTime() - new Date(a.created_at || Date.now()).getTime());
+
+  const allowedAdminEmails = ["drnarayanak@gmail.com", "kishanpradeep84@gmail.com"];
+  const userEmail = session?.user?.email;
+
+  if (session && userEmail && !allowedAdminEmails.includes(userEmail)) {
+    return (
+      <div className="fixed inset-0 z-50 bg-zinc-900/85 backdrop-blur-md flex items-center justify-center p-4">
+        <div className="bg-white dark:bg-zinc-950 p-8 rounded-2xl shadow-2xl max-w-md w-full text-center space-y-4">
+          <ShieldAlert className="w-12 h-12 text-red-500 mx-auto" />
+          <h2 className="text-xl font-bold font-mono text-zinc-900 dark:text-white">Access Denied</h2>
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            Your account ({userEmail}) does not have Control Panel access privileges.
+          </p>
+          <button
+            onClick={async () => {
+              await supabase.auth.signOut();
+              onClose();
+            }}
+            className="mt-6 px-6 py-2 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-lg text-sm font-bold w-full hover:bg-zinc-800"
+          >
+            Sign Out & Return Home
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 bg-zinc-900/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-hidden">
@@ -1200,17 +1410,19 @@ export default function AdminCMS({ onClose, session }: AdminCMSProps) {
             {/* User Profile Badge */}
             <div className="bg-white dark:bg-zinc-950 border border-zinc-200/80 dark:border-zinc-800 rounded-xl p-3.5 shadow-2xs space-y-1.5">
               <div className="font-bold text-xs text-zinc-900 dark:text-white leading-tight">
-                Dr. Narayana K (Admin)
+                {userProfile?.name || session?.user?.user_metadata?.name || "Admin User"}
               </div>
-              <div className="text-[11px] text-zinc-500 dark:text-zinc-400 font-mono">
-                admin@healic.co
+              <div className="text-[11px] text-zinc-500 dark:text-zinc-400 font-mono truncate" title={userProfile?.email || session?.user?.email || "admin@healic.co"}>
+                {userProfile?.email || session?.user?.email || "admin@healic.co"}
               </div>
               <div className="flex space-x-1.5 pt-1">
-                <span className="px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-mono text-[9px] font-bold">
-                  ADMIN
-                </span>
-                <span className="px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 font-mono text-[9px] font-bold">
-                  PREMIUM
+                {userProfile?.permissions?.includes("admin") && (
+                  <span className="px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-mono text-[9px] font-bold uppercase">
+                    Admin
+                  </span>
+                )}
+                <span className="px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 font-mono text-[9px] font-bold uppercase">
+                  {userProfile?.permissions?.includes("admin") ? "Premium" : "Editorial"}
                 </span>
               </div>
             </div>
@@ -1233,7 +1445,7 @@ export default function AdminCMS({ onClose, session }: AdminCMSProps) {
               <nav className="space-y-1">
                 {/* 1. Global Healthcare News Generate / Catalog */}
                 <button
-                  onClick={() => { setActiveTab("catalog"); setEditingArticle(null); }}
+                  onClick={() => { setActiveTab("profile"); setEditingArticle(null); }}
                   className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-semibold transition-all ${
                     activeTab === "catalog"
                       ? "bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 font-bold border border-emerald-200/80 dark:border-emerald-800/80"
@@ -1282,33 +1494,33 @@ export default function AdminCMS({ onClose, session }: AdminCMSProps) {
                   </span>
                 </button>
 
-                {/* 4. Create Pages */}
+                {/* 4. Clinical Insights MS */}
                 <button
-                  onClick={() => { setActiveTab("create_pages"); setEditingArticle(null); }}
+                  onClick={() => { setActiveTab("clinical_insights"); setEditingArticle(null); }}
                   className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-semibold transition-all ${
-                    activeTab === "create_pages"
+                    activeTab === "clinical_insights"
                       ? "bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 font-bold border border-purple-200/80 dark:border-purple-800/80"
                       : "text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800/60"
                   }`}
                 >
                   <div className="flex items-center space-x-2.5">
-                    <FolderPlus className="w-4 h-4 text-purple-600" />
-                    <span>Create Pages</span>
+                    <Stethoscope className="w-4 h-4 text-purple-600" />
+                    <span>Clinical Insights MS</span>
                   </div>
                 </button>
 
-                {/* 4.1. Create Scientific Events Page (Below Create Pages) */}
+                {/* 5. Spotlight MS */}
                 <button
-                  onClick={() => { setActiveTab("create_scientific_events"); setEditingArticle(null); }}
+                  onClick={() => { setActiveTab("spotlight"); setEditingArticle(null); }}
                   className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-semibold transition-all ${
-                    activeTab === "create_scientific_events"
+                    activeTab === "spotlight"
                       ? "bg-cyan-50 dark:bg-cyan-950/50 text-cyan-700 dark:text-cyan-300 font-bold border border-cyan-200/80 dark:border-cyan-800/80"
                       : "text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800/60"
                   }`}
                 >
                   <div className="flex items-center space-x-2.5">
-                    <Calendar className="w-4 h-4 text-cyan-600" />
-                    <span>Create Scientific Events Page</span>
+                    <Sparkles className="w-4 h-4 text-cyan-600" />
+                    <span>Spotlight MS</span>
                   </div>
                 </button>
 
@@ -1399,17 +1611,42 @@ export default function AdminCMS({ onClose, session }: AdminCMSProps) {
                     </span>
                   )}
                 </button>
+                {/* 8. Profile Settings */}
+                <button
+                  onClick={() => { setActiveTab("profile"); setEditingArticle(null); }}
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-semibold transition-all ${
+                    activeTab === "profile"
+                      ? "bg-slate-50 dark:bg-slate-950/50 text-slate-700 dark:text-slate-300 font-bold border border-slate-200/80 dark:border-slate-800/80"
+                      : "text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800/60"
+                  }`}
+                >
+                  <div className="flex items-center space-x-2.5">
+                    <User className="w-4 h-4 text-slate-600" />
+                    <span>Profile Settings</span>
+                  </div>
+                </button>
               </nav>
             </div>
           </div>
 
-          <button
-            onClick={onClose}
-            className="w-full flex items-center justify-center space-x-2 px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-800 text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-          >
-            <X className="w-4 h-4" />
-            <span>Close Control Panel</span>
-          </button>
+          <div className="space-y-3">
+            <button
+              onClick={onClose}
+              className="w-full flex items-center justify-center space-x-2 px-3 py-2.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+            >
+              <X className="w-4 h-4" />
+              <span>Close Control Panel</span>
+            </button>
+            <button
+              onClick={async () => {
+                await supabase.auth.signOut();
+                onClose();
+              }}
+              className="w-full flex justify-center items-center py-2.5 px-4 border border-red-300 dark:border-red-800 rounded-lg text-xs font-mono font-bold uppercase tracking-widest text-red-600 dark:text-red-400 bg-white dark:bg-zinc-900 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+            >
+              Sign Out
+            </button>
+          </div>
         </aside>
 
         {/* RIGHT MAIN WORKSPACE */}
@@ -1422,8 +1659,8 @@ export default function AdminCMS({ onClose, session }: AdminCMSProps) {
                 {activeTab === "catalog" && "Global Healthcare News Generat Engine"}
                 {activeTab === "write_editorial" && "Write Editorial Article"}
                 {activeTab === "generate_news" && "Generate Specialty News"}
-                {activeTab === "create_pages" && "Create Portal Pages"}
-                {activeTab === "create_scientific_events" && "Create Scientific Events Page"}
+                {activeTab === "clinical_insights" && "Clinical Insights MS"}
+                {activeTab === "spotlight" && "Spotlight MS"}
                 {activeTab === "upload_images" && "Google Cloud Storage Asset Manager"}
                 {activeTab === "manage_scientific_events" && "Manage Scientific Event Assets & Attendees"}
                 {activeTab === "queue" && "Ingestion Review Queue"}
@@ -1492,6 +1729,29 @@ export default function AdminCMS({ onClose, session }: AdminCMSProps) {
                       onChange={e => setEditingArticle({ ...editingArticle, bodyAnalysis: e.target.value })}
                       className="w-full px-3.5 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white"
                     />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">Article Image</label>
+                    <div className="flex items-center space-x-4">
+                      {((editingArticle as any).image_url || editingArticle.imageUrl) && (
+                        <img 
+                          src={(editingArticle as any).image_url || editingArticle.imageUrl} 
+                          className="w-16 h-16 object-cover rounded-lg border border-zinc-200 dark:border-zinc-700"
+                        />
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setImageSelectorTarget('edit');
+                          setShowImageSelector(true);
+                        }}
+                        className="px-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 text-xs font-bold rounded flex items-center space-x-2 transition-colors"
+                      >
+                        <ImageIcon className="w-3.5 h-3.5" />
+                        <span>Change Image</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -1614,16 +1874,33 @@ export default function AdminCMS({ onClose, session }: AdminCMSProps) {
                           />
                         </div>
 
-                        <div>
+                        <div className="md:col-span-2">
                           <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                            Image URL (Free stock or illustration)
+                            Image Asset (Thumbnail)
                           </label>
-                          <input
-                            type="url"
-                            value={editorialForm.imageUrl}
-                            onChange={e => setEditorialForm({ ...editorialForm, imageUrl: e.target.value })}
-                            className="w-full px-3.5 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white"
-                          />
+                          <div className="flex items-center space-x-4">
+                            {editorialForm.imageUrl && (
+                              <img 
+                                src={editorialForm.imageUrl} 
+                                className="w-16 h-16 object-cover rounded-lg border border-zinc-200 dark:border-zinc-700"
+                              />
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setImageSelectorTarget('editorial');
+                                setShowImageSelector(true);
+                              }}
+                              className="px-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 text-xs font-bold rounded flex items-center space-x-2 transition-colors"
+                            >
+                              <ImageIcon className="w-3.5 h-3.5" />
+                              <span>{editorialForm.imageUrl ? 'Change Image' : 'Select Image'}</span>
+                            </button>
+                            <input 
+                               type="hidden" 
+                               value={editorialForm.imageUrl} 
+                            />
+                          </div>
                         </div>
 
                         <div>
@@ -1657,6 +1934,76 @@ export default function AdminCMS({ onClose, session }: AdminCMSProps) {
                         </button>
                       </div>
                     </form>
+
+                    {/* EDITORIALS LIST */}
+                    <div className="mt-8 pt-8 border-t border-zinc-200 dark:border-zinc-800">
+                      <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase font-mono mb-4 flex items-center space-x-2">
+                        <FileEdit className="w-4 h-4 text-teal-600" />
+                        <span>Published Editorials</span>
+                      </h3>
+                      <div className="grid grid-cols-1 gap-4">
+                        {editorials.map(ed => (
+                          <div key={ed.id} className="bg-white dark:bg-zinc-950 p-5 rounded-2xl border border-zinc-200/80 dark:border-zinc-800 shadow-2xs hover:shadow-xs transition-all flex flex-col justify-between">
+                            <div>
+                              <div className="flex items-center justify-between mb-2">
+                                <span className={`px-2 py-0.5 rounded text-[9.5px] font-mono font-bold uppercase tracking-wider ${
+                                  ed.status === "published"
+                                    ? "bg-emerald-100 text-emerald-700"
+                                    : "bg-amber-100 text-amber-700"
+                                }`}>
+                                  {ed.status === "published" ? "✓ PUBLISHED" : "⏳ DRAFT"}
+                                </span>
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => setEditorialImageTargetId(ed.id)}
+                                    className="p-1.5 text-zinc-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-md transition-colors"
+                                    title={ed.imageUrl ? "Change Image" : "Add Image"}
+                                  >
+                                    <ImageIcon className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setEditingArticle({
+                                        ...ed,
+                                        sourceFeature: 'Editorial',
+                                        imageUrl: ed.image_url || ed.imageUrl,
+                                        imageCredit: ed.image_credit || ed.imageCredit,
+                                        sourceName: ed.author_name || ed.sourceName,
+                                        authorEmail: ed.author_email || ed.authorEmail,
+                                        readingTimeMinutes: ed.reading_time_minutes || ed.readingTimeMinutes,
+                                        summary30s: ed.summary_30s || ed.summary30s,
+                                        bodyAnalysis: ed.body_analysis || ed.bodyAnalysis,
+                                        clinicalImpactScore: ed.clinical_impact_score || ed.clinicalImpactScore
+                                      });
+                                      window.scrollTo({ top: 0, behavior: "smooth" });
+                                    }}
+                                    className="p-1.5 text-zinc-400 hover:text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-900/30 rounded-md transition-colors"
+                                    title="Edit Editorial"
+                                  >
+                                    <FileEdit className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </div>
+                              <h4 className="text-sm font-bold text-zinc-900 dark:text-white leading-snug line-clamp-2 mb-1.5">
+                                {ed.headline}
+                              </h4>
+                              {(ed.author_name || ed.author_email) && (
+                                <div className="text-[10px] font-mono text-zinc-500 mb-2">
+                                  Pub: {ed.author_name || "Unknown"} {ed.author_email ? `(${ed.author_email})` : ""}
+                                </div>
+                              )}
+                              <p className="text-xs text-zinc-500 dark:text-zinc-400 line-clamp-2 leading-relaxed">
+                                {ed.summary30s}
+                              </p>
+                            </div>
+                            <div className="pt-3 mt-3 border-t border-zinc-100 dark:border-zinc-900 flex items-center justify-between text-[10.5px] font-mono text-zinc-400">
+                              <span>{new Date(ed.created_at || Date.now()).toLocaleDateString("en-IN")}</span>
+                              <span>{ed.views || 0} views</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 )}
 
@@ -1727,12 +2074,12 @@ export default function AdminCMS({ onClose, session }: AdminCMSProps) {
                             onClick={toggleSelectAllSections}
                             className="text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
                           >
-                            {selectedSections.length === ALL_5_SECTIONS.length ? "Deselect All" : "Select All 5 Sections"}
+                            {selectedSections.length === ALL_SECTIONS.length ? "Deselect All" : "Select All Sections"}
                           </button>
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                          {ALL_5_SECTIONS.map(sec => {
+                          {ALL_SECTIONS.map(sec => {
                             const isSelected = selectedSections.includes(sec.id);
                             const isLockedForWeek = isSectionLockedForWeek(sec.id, selectedWeek);
 
@@ -1772,6 +2119,21 @@ export default function AdminCMS({ onClose, session }: AdminCMSProps) {
                                   <div className="text-[10.5px] font-mono text-zinc-400">
                                     Target URL: <span className="text-indigo-600 dark:text-indigo-400 font-bold">{sec.url}</span>
                                   </div>
+
+                                  {!isLockedForWeek && (
+                                    <div className="mt-3 flex items-center justify-between border-t border-zinc-100 dark:border-zinc-800 pt-3">
+                                      <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Total to Generate:</span>
+                                      <input
+                                        type="number"
+                                        min="1"
+                                        max="10"
+                                        value={newsCounts[sec.label] || 1}
+                                        onChange={(e) => setNewsCounts(prev => ({ ...prev, [sec.label]: parseInt(e.target.value) || 1 }))}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="w-16 px-2 py-1 text-xs border border-zinc-300 dark:border-zinc-700 rounded bg-white dark:bg-zinc-900 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                      />
+                                    </div>
+                                  )}
                                 </div>
 
                                 {isLockedForWeek && (
@@ -1843,314 +2205,146 @@ export default function AdminCMS({ onClose, session }: AdminCMSProps) {
                           Note: Once generated, news automatically streams to live destination URLs and locks for that week.
                         </p>
                       </div>
-
                     </div>
-                  </div>
-                )}
 
-                {/* 3. CREATE PAGES TAB */}
-                {activeTab === "create_pages" && (
-                  <div className="max-w-4xl mx-auto space-y-6 pb-8">
-                    {pageSuccess && (
-                      <div className="p-4 rounded-xl bg-purple-50 dark:bg-purple-950/60 border border-purple-200 dark:border-purple-800 text-purple-800 dark:text-purple-200 text-xs font-semibold flex items-center justify-between">
-                        <span>{pageSuccess}</span>
-                        <CheckCircle2 className="w-4 h-4 text-purple-600 shrink-0" />
-                      </div>
-                    )}
-
+                    {/* GENERATED ARTICLES DISPLAY */}
                     <div className="bg-white dark:bg-zinc-950 p-6 sm:p-8 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm space-y-6">
-                      <div className="border-b border-zinc-100 dark:border-zinc-900 pb-3 flex items-center justify-between">
-                        <div>
-                          <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase font-mono flex items-center space-x-2">
-                            <FolderPlus className="w-4 h-4 text-purple-600" />
-                            <span>{editingPageId ? "Edit & Republish Portal Page" : "Create Portal & Specialty Pages"}</span>
-                          </h3>
-                          <p className="text-xs text-zinc-500 mt-0.5">
-                            Generate responsive specialty pages matching uploaded webpage layout designs across all devices.
-                          </p>
-                        </div>
-
-                        {editingPageId && (
-                          <span className="px-2.5 py-1 rounded bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-200 font-mono text-[10px] font-bold">
-                            ✏️ Editing Mode
-                          </span>
-                        )}
-                      </div>
-
-                      <form onSubmit={handleCreatePageSubmit} className="space-y-4">
-                        
-                        {/* SECTION SELECTOR */}
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                          {[
-                            { type: "Treatment Update", icon: Activity, desc: "New clinical protocols & therapies", path: "treatmentupdate" },
-                            { type: "Pharma and Drugs", icon: Pill, desc: "CDSCO / FDA drug safety & approvals", path: "pharmadrugs" },
-                            { type: "Hospital Intelligence", icon: ShieldAlert, desc: "Emergency protocols & alerts", path: "alerts" },
-                            { type: "Current Guidelines", icon: BookOpen, desc: "Consensus clinical guidelines", path: "guidelines" },
-                            { type: "Any Other", icon: FolderPlus, desc: "Custom specialty portal page", path: "pages" }
-                          ].map(item => (
-                            <div
-                              key={item.type}
-                              onClick={() => setPageForm({ ...pageForm, pageType: item.type as any })}
-                              className={`p-3.5 rounded-xl border cursor-pointer transition-all ${
-                                pageForm.pageType === item.type
-                                  ? "border-purple-600 bg-purple-50/60 dark:bg-purple-950/50 shadow-xs"
-                                  : "border-zinc-200 dark:border-zinc-800 hover:border-purple-300"
-                              }`}
-                            >
-                              <item.icon className="w-4 h-4 text-purple-600 mb-1.5" />
-                              <div className="font-bold text-xs text-zinc-900 dark:text-white">{item.type}</div>
-                              <div className="text-[10px] text-zinc-500">{item.desc}</div>
-                            </div>
-                          ))}
-                        </div>
-
-                        {/* PAGE TITLE */}
-                        <div>
-                          <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                            Page / Topic Title *
-                          </label>
-                          <input
-                            type="text"
-                            required
-                            value={pageForm.customTitle}
-                            onChange={e => setPageForm({ ...pageForm, customTitle: e.target.value })}
-                            placeholder="e.g. National Cardiology Summit 2026 / CDSCO Oral Formulation Guidelines"
-                            className="w-full px-3.5 py-2.5 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white font-medium"
-                          />
-                        </div>
-
-                        {/* SHORTENED UNIQUE PAGE SLUG */}
-                        <div className="bg-zinc-50 dark:bg-zinc-900/60 p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800">
-                          <label className="block text-xs font-bold text-zinc-900 dark:text-white mb-1">
-                            Shortened Unique Page Name (URL Slug) *
-                          </label>
-                          <div className="flex items-center space-x-2">
-                            <span className="text-[11px] font-mono text-zinc-400">
-                              http://localhost:3001/{pageForm.pageType === "Treatment Update" ? "treatmentupdate" : pageForm.pageType === "Pharma and Drugs" ? "pharmadrugs" : pageForm.pageType === "Hospital Intelligence" ? "alerts" : pageForm.pageType === "Current Guidelines" ? "guidelines" : "pages"}/
-                            </span>
-                            <input
-                              type="text"
-                              required
-                              value={pageForm.slug}
-                              onChange={e => setPageForm({ ...pageForm, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "") })}
-                              placeholder="e.g. cardio-guidelines-2026"
-                              className="flex-1 px-3 py-1.5 rounded-lg border border-purple-300 dark:border-purple-800 bg-white dark:bg-zinc-950 text-xs font-mono text-purple-600 font-extrabold"
-                            />
+                      <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-900 pb-4">
+                        <div className="flex items-center space-x-3">
+                          <div className="p-2.5 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600">
+                            <Database className="w-6 h-6" />
+                          </div>
+                          <div>
+                            <h3 className="text-base font-extrabold text-zinc-900 dark:text-white uppercase font-mono tracking-tight">
+                              Generated Articles in Database
+                            </h3>
+                            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                              Latest generated items from Supabase tables for each feature.
+                            </p>
                           </div>
                         </div>
+                        <button
+                          onClick={fetchGeneratedSpecialtyNews}
+                          className="p-2 bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-lg text-zinc-600 dark:text-zinc-400 transition-colors"
+                          title="Refresh Database"
+                        >
+                          <RefreshCw className="w-4 h-4" />
+                        </button>
+                      </div>
 
-                        {/* ANY OTHER SPECIFIC INFORMATION OR CRITERIA WHILE PAGE CREATION */}
-                        <div>
-                          <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                            Any other specific information or criteria while page creation
-                          </label>
-                          <textarea
-                            rows={4}
-                            value={pageForm.summary}
-                            onChange={e => setPageForm({ ...pageForm, summary: e.target.value })}
-                            placeholder="Specify clinical requirements, target audience criteria, speaker info, dosage instructions, or custom guidelines..."
-                            className="w-full px-3.5 py-2.5 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white leading-relaxed"
-                          />
-                        </div>
-
-                        {/* WEBPAGE IMAGE UPLOAD */}
-                        <div className="p-4 rounded-xl bg-purple-50/50 dark:bg-purple-950/30 border border-dashed border-purple-300 dark:border-purple-800 space-y-2">
-                          <label className="block text-xs font-bold text-zinc-900 dark:text-white flex items-center space-x-2">
-                            <UploadCloud className="w-4 h-4 text-purple-600 shrink-0" />
-                            <span>WebPage Image Upload (Upload image of a webpage how it has to be generated) *</span>
-                          </label>
-                          <p className="text-[11px] text-zinc-500 font-mono">
-                            Upload design mockup image. The AI engine will render a pleasant, responsive UI page matching this design layout.
-                          </p>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={handlePortalWebPageImageUpload}
-                            className="w-full text-xs text-zinc-600 font-mono file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-purple-100 file:text-purple-800 hover:file:bg-purple-200 cursor-pointer"
-                          />
-                          {pageForm.webpageImage && (
-                            <div className="pt-2 flex items-center space-x-3">
-                              <img src={pageForm.webpageImage} alt="WebPage Layout Upload" className="h-16 w-24 object-cover rounded-lg border border-zinc-300 shadow-xs" />
-                              <span className="text-[10.5px] font-mono text-emerald-600 font-bold">✓ WebPage Layout Image Uploaded</span>
+                      <div className="space-y-6">
+                        {ALL_SECTIONS.map(sec => {
+                          const articles = generatedSpecialtyNews[sec.label] || [];
+                          return (
+                            <div key={sec.id} className="border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden">
+                              <div className="bg-zinc-50 dark:bg-zinc-900 px-4 py-3 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center">
+                                <div className="flex items-center space-x-2">
+                                  <sec.icon className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                                  <h4 className="font-bold text-sm text-zinc-800 dark:text-zinc-200">{sec.label}</h4>
+                                </div>
+                                <span className="text-xs font-mono bg-zinc-200 dark:bg-zinc-800 px-2 py-0.5 rounded-full text-zinc-600 dark:text-zinc-400">
+                                  {articles.length} items
+                                </span>
+                              </div>
+                              <div className="divide-y divide-zinc-100 dark:divide-zinc-800/50 max-h-[300px] overflow-y-auto">
+                                {articles.length === 0 ? (
+                                  <div className="p-6 text-center text-xs text-zinc-400">
+                                    No articles found in this category.
+                                  </div>
+                                ) : (
+                                  articles.map((article: any) => (
+                                    <div key={article.id} className="p-4 hover:bg-zinc-50 dark:hover:bg-zinc-800/30 transition-colors">
+                                      <h5 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-1">
+                                        {article.title || article.headline || article.event_title || article.drug_name || article.provider_name || 'Untitled'}
+                                      </h5>
+                                      <div className="flex items-center justify-between text-xs text-zinc-500 font-mono mt-2">
+                                        <div className="flex space-x-3">
+                                          <span>Status: {article.status || 'published'}</span>
+                                          <span>{new Date(article.created_at).toLocaleDateString()}</span>
+                                        </div>
+                                        <button 
+                                          onClick={() => {
+                                            const table = {
+                                              "Treatment Update": "treatment_update",
+                                              "Scientific Events": "scientific_events",
+                                              "Pharma and Drugs": "drugs",
+                                              "Hospital Intelligence": "hospital_alerts",
+                                              "Current Guidelines": "current_guidelines",
+                                              "Health Care Providers": "providers"
+                                            }[sec.label as string] || "treatment_update";
+                                            setEditingGeneratedArticle({
+                                              id: article.id,
+                                              table,
+                                              data: { ...article }
+                                            });
+                                          }}
+                                          className="text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
+                                        >
+                                          <Edit3 className="w-3 h-3" /> Edit
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ))
+                                )}
+                              </div>
                             </div>
-                          )}
-                        </div>
+                          );
+                        })}
+                      </div>
+                    </div>
 
-                        {/* PRODUCT METADATA (UPLOAD LOGO, PRODUCT NAME, PRODUCT DETAILS LINK) */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4 rounded-xl bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800">
-                          <div>
-                            <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                              Upload Logo
-                            </label>
-                            <input
-                              type="file"
-                              accept="image/*"
-                              onChange={handlePortalLogoUpload}
-                              className="w-full text-xs text-zinc-600 font-mono file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-zinc-200 file:text-zinc-800 hover:file:bg-zinc-300 cursor-pointer"
-                            />
-                            {pageForm.logoUrl && (
-                              <img src={pageForm.logoUrl} alt="Uploaded Logo" className="mt-2 h-8 w-auto object-contain rounded bg-white p-1 border" />
+                    {/* EDIT MODAL */}
+                    {editingGeneratedArticle && (
+                      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                        <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+                          <div className="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center">
+                            <h3 className="text-lg font-bold text-zinc-900 dark:text-white flex items-center gap-2">
+                              <Edit3 className="w-5 h-5 text-indigo-500" />
+                              Edit Article
+                            </h3>
+                            <button onClick={() => setEditingGeneratedArticle(null)} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300">
+                              <X className="w-5 h-5" />
+                            </button>
+                          </div>
+                          <div className="p-6 overflow-y-auto flex-1 space-y-4 font-sans text-left">
+                            {Object.entries(editingGeneratedArticle.data).map(([key, value]) => 
+                              renderDynamicField(key, value)
                             )}
                           </div>
-
-                          <div>
-                            <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                              Upload Product Name
-                            </label>
-                            <input
-                              type="text"
-                              value={pageForm.productName}
-                              onChange={e => setPageForm({ ...pageForm, productName: e.target.value })}
-                              placeholder="e.g. CardiaGuard XL 50mg"
-                              className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                              Upload Product Details Link
-                            </label>
-                            <input
-                              type="text"
-                              value={pageForm.productDetailsUrl}
-                              onChange={e => setPageForm({ ...pageForm, productDetailsUrl: e.target.value })}
-                              placeholder="https://pharma-brand.org/product-info"
-                              className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white"
-                            />
-                          </div>
-                        </div>
-
-                        {/* GENERATE / REPUBLISH BUTTON */}
-                        <div className="pt-4 border-t border-zinc-100 dark:border-zinc-900 flex items-center justify-between">
-                          {editingPageId ? (
+                          <div className="px-6 py-4 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 flex justify-end gap-3">
                             <button
-                              type="button"
-                              onClick={handleCancelPortalPageEdit}
-                              className="px-4 py-2 rounded-xl border border-zinc-300 dark:border-zinc-800 text-xs font-bold text-zinc-600 hover:bg-zinc-100 cursor-pointer"
+                              onClick={() => setEditingGeneratedArticle(null)}
+                              className="px-4 py-2 text-sm font-semibold text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-lg transition-colors"
                             >
-                              Cancel Editing
+                              Cancel
                             </button>
-                          ) : (
-                            <div />
-                          )}
-
-                          <button
-                            type="submit"
-                            className="px-8 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-mono text-xs font-bold flex items-center space-x-2 shadow-md transition-all cursor-pointer"
-                          >
-                            <Sparkles className="w-4 h-4" />
-                            <span>{editingPageId ? "✨ Update & Republish Page" : "✨ Generate Page"}</span>
-                          </button>
+                            <button
+                              onClick={handleUpdateGeneratedArticle}
+                              disabled={savingGeneratedArticle}
+                              className="px-4 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
+                            >
+                              {savingGeneratedArticle ? "Saving..." : "Save Changes"}
+                            </button>
+                          </div>
                         </div>
-                      </form>
-                    </div>
-
-                    {/* CREATED PORTAL PAGES LIST (BELOW THE FORM) */}
-                    <div className="bg-white dark:bg-zinc-950 p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-xs space-y-4">
-                      <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-900 pb-3">
-                        <div>
-                          <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase font-mono flex items-center space-x-2">
-                            <FolderPlus className="w-4 h-4 text-purple-600" />
-                            <span>Created Portal Pages ({availablePages.length})</span>
-                          </h3>
-                          <p className="text-xs text-zinc-500 mt-0.5">
-                            Edit content anytime (Page Information, WebPage layout, Product details, Logo) and republish.
-                          </p>
-                        </div>
-
-                        <span className="px-2.5 py-1 rounded bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 font-mono text-[10px] font-bold">
-                          {availablePages.length} Pages Published
-                        </span>
                       </div>
-
-                      {availablePages.length === 0 ? (
-                        <div className="text-center py-8 text-xs text-zinc-400 font-mono">
-                          No pages created yet. Use the form above to generate your first portal page.
-                        </div>
-                      ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {availablePages.map(page => {
-                            const matchedArticle = articles.find(a => a.id === page.id);
-                            const category = matchedArticle?.category || page.category || "Treatment Update";
-                            const sectionPathMap: Record<string, string> = {
-                              "Treatment Update": "treatmentupdate",
-                              "Pharma and Drugs": "pharmadrugs",
-                              "Hospital Intelligence": "alerts",
-                              "Current Guidelines": "guidelines",
-                              "Any Other": "pages"
-                            };
-                            const secPath = sectionPathMap[category] || "pages";
-                            const pageSlug = (matchedArticle as any)?.slug || page.title.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-                            const liveUrl = `http://localhost:3001/${secPath}/${pageSlug}`;
-                            const isBeingEdited = editingPageId === page.id;
-
-                            return (
-                              <div
-                                key={page.id}
-                                className={`p-4 sm:p-5 rounded-2xl border transition-all flex flex-col justify-between space-y-3 ${
-                                  isBeingEdited
-                                    ? "bg-purple-50/70 dark:bg-purple-950/60 border-purple-500 shadow-sm"
-                                    : "bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 hover:border-purple-300"
-                                }`}
-                              >
-                                <div className="space-y-2">
-                                  <div className="flex items-center justify-between">
-                                    <span className="px-2 py-0.5 rounded text-[9.5px] font-mono font-extrabold uppercase bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-200">
-                                      {category}
-                                    </span>
-                                    <span className="text-[10px] font-mono text-zinc-400">
-                                      {new Date(page.date).toLocaleDateString("en-IN")}
-                                    </span>
-                                  </div>
-
-                                  <h4 className="text-xs font-extrabold text-zinc-900 dark:text-white leading-snug line-clamp-2">
-                                    {page.title}
-                                  </h4>
-
-                                  <div className="text-[10.5px] font-mono text-purple-700 dark:text-purple-400 truncate">
-                                    URL: <a href={`/${secPath}/${pageSlug}`} target="_blank" rel="noopener noreferrer" className="underline font-bold">{liveUrl}</a>
-                                  </div>
-                                </div>
-
-                                <div className="pt-3 border-t border-zinc-100 dark:border-zinc-900 flex items-center justify-between">
-                                  <div className="flex space-x-2">
-                                    {matchedArticle && (
-                                      <button
-                                        onClick={() => handleEditPortalPage(matchedArticle)}
-                                        className="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-mono text-[10.5px] font-bold flex items-center space-x-1 transition-all cursor-pointer"
-                                      >
-                                        <Edit3 className="w-3 h-3" />
-                                        <span>Edit & Republish</span>
-                                      </button>
-                                    )}
-
-                                    <button
-                                      onClick={() => handleDeletePortalPage(page.id)}
-                                      className="p-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 text-[10px] font-bold transition-all cursor-pointer"
-                                      title="Delete Portal Page"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
-
-                                  <a
-                                    href={`/${secPath}/${pageSlug}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-[10.5px] font-mono font-bold text-purple-600 hover:underline flex items-center space-x-1"
-                                  >
-                                    <span>View Live Page</span>
-                                    <ExternalLink className="w-3 h-3" />
-                                  </a>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
+                    )}
                   </div>
                 )}
+                
+                {/* 4. CLINICAL INSIGHTS MS TAB */}
+                {activeTab === "clinical_insights" && (
+                  <div className="max-w-5xl mx-auto p-4 sm:p-6 lg:p-8 font-sans">
+                    <ClinicalInsightsMS />
+                  </div>
+                )}
+
+                {/* 5. SPOTLIGHT MS TAB */}
+                {activeTab === "spotlight" && (
+                  <SpotlightMS />
+                )}
+
+
 
                 {/* 3.6. UPLOAD IMAGES TAB (Google Cloud Storage Asset Gallery) */}
                 {activeTab === "upload_images" && (
@@ -2334,423 +2528,6 @@ export default function AdminCMS({ onClose, session }: AdminCMSProps) {
                     </div>
                   </div>
                 )}
-
-                {/* 3.5. CREATE SCIENTIFIC EVENTS PAGE TAB (Directly below Create Pages) */}
-                {activeTab === "create_scientific_events" && (
-                  <div className="max-w-4xl mx-auto space-y-6 font-sans">
-                    {createEventSuccess && (
-                      <div className="p-4 rounded-xl bg-cyan-50 dark:bg-cyan-950/60 border border-cyan-200 dark:border-cyan-800 text-cyan-900 dark:text-cyan-100 text-xs font-semibold flex items-center space-x-2.5">
-                        <CheckCircle2 className="w-5 h-5 text-cyan-600 shrink-0" />
-                        <span>{createEventSuccess}</span>
-                      </div>
-                    )}
-
-                    <div className="bg-white dark:bg-zinc-950 p-6 sm:p-8 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm space-y-6">
-                      <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-900 pb-4">
-                        <div className="flex items-center space-x-3">
-                          <div className="p-2.5 rounded-xl bg-cyan-50 dark:bg-cyan-950/60 text-cyan-600">
-                            <Calendar className="w-6 h-6" />
-                          </div>
-                          <div>
-                            <h3 className="text-base font-extrabold text-zinc-900 dark:text-white uppercase font-mono tracking-tight">
-                              Create Scientific Event Page
-                            </h3>
-                            <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                              Publish national conferences, medical symposia, CME workshops, and academic grand rounds to http://localhost:3001/scientificevents.
-                            </p>
-                          </div>
-                        </div>
-
-                        <a 
-                          href="/scientificevents" 
-                          target="_blank" 
-                          rel="noopener noreferrer" 
-                          className="px-3 py-1.5 rounded-lg border border-cyan-200 text-cyan-700 font-mono text-xs font-bold flex items-center space-x-1.5 hover:bg-cyan-50 transition-colors"
-                        >
-                          <span>View Live Portal</span>
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </a>
-                      </div>
-
-                      <form onSubmit={handleCreateScientificEventSubmit} className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="md:col-span-2">
-                            <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                              Scientific Event Title *
-                            </label>
-                            <input
-                              type="text"
-                              required
-                              value={createEventForm.title}
-                              onChange={e => setCreateEventForm({ ...createEventForm, title: e.target.value })}
-                              placeholder="e.g. 42nd National Annual Conference of Cardiology & Precision Medicine 2026"
-                              className="w-full px-3.5 py-2.5 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white font-medium"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                              Organizer / Academic Society *
-                            </label>
-                            <input
-                              type="text"
-                              required
-                              value={createEventForm.organizer}
-                              onChange={e => setCreateEventForm({ ...createEventForm, organizer: e.target.value })}
-                              placeholder="e.g. Indian Medical Association / Cardiology Society of India"
-                              className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white font-medium"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                              Event Scope
-                            </label>
-                            <select
-                              value={createEventForm.scope}
-                              onChange={e => setCreateEventForm({ ...createEventForm, scope: e.target.value as any })}
-                              className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white font-medium"
-                            >
-                              <option value="Nationwide">🇮🇳 Nationwide / National</option>
-                              <option value="Regional">Regional / Institutional</option>
-                              <option value="Global">🌐 Global / International</option>
-                            </select>
-                          </div>
-
-                          <div>
-                            <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                              Event Format & Delivery
-                            </label>
-                            <select
-                              value={createEventForm.format}
-                              onChange={e => setCreateEventForm({ ...createEventForm, format: e.target.value as any })}
-                              className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white font-medium"
-                            >
-                              <option value="Hybrid">Hybrid (In-Person + Live Stream)</option>
-                              <option value="In-Person">In-Person Only</option>
-                              <option value="Virtual">Virtual Only</option>
-                            </select>
-                          </div>
-
-                          <div>
-                            <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                              CME Credits (Hours)
-                            </label>
-                            <input
-                              type="number"
-                              value={createEventForm.cmeCredits}
-                              onChange={e => setCreateEventForm({ ...createEventForm, cmeCredits: Number(e.target.value) })}
-                              className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white font-medium"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                              Venue Name & Auditorium
-                            </label>
-                            <input
-                              type="text"
-                              value={createEventForm.venue}
-                              onChange={e => setCreateEventForm({ ...createEventForm, venue: e.target.value })}
-                              placeholder="e.g. AIIMS Main Convention Hall"
-                              className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white font-medium"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                              City & State
-                            </label>
-                            <input
-                              type="text"
-                              value={createEventForm.city}
-                              onChange={e => setCreateEventForm({ ...createEventForm, city: e.target.value })}
-                              placeholder="e.g. New Delhi"
-                              className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white font-medium"
-                            />
-                          </div>
-
-                          <div className="md:col-span-2">
-                            <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                              Target Specialties (Comma Separated)
-                            </label>
-                            <input
-                              type="text"
-                              value={createEventForm.specialties}
-                              onChange={e => setCreateEventForm({ ...createEventForm, specialties: e.target.value })}
-                              placeholder="e.g. Cardiology, Internal Medicine, Medical Education"
-                              className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white font-medium"
-                            />
-                          </div>
-
-                          <div className="md:col-span-2">
-                            <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                              Scientific Event Overview & Key Highlights *
-                            </label>
-                            <textarea
-                              required
-                              rows={4}
-                              value={createEventForm.description}
-                              onChange={e => setCreateEventForm({ ...createEventForm, description: e.target.value })}
-                              placeholder="Provide key session topics, keynote speakers, paper submission deadlines, and conference objectives..."
-                              className="w-full px-3.5 py-2.5 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white leading-relaxed"
-                            />
-                          </div>
-
-                          {/* 1. WEBPAGE IMAGE UPLOAD (BELOW HIGHLIGHTS) */}
-                          <div className="md:col-span-2 p-4 rounded-xl bg-cyan-50/50 dark:bg-cyan-950/30 border border-dashed border-cyan-300 dark:border-cyan-800 space-y-2">
-                            <label className="block text-xs font-bold text-zinc-900 dark:text-white flex items-center space-x-2">
-                              <UploadCloud className="w-4 h-4 text-cyan-600 shrink-0" />
-                              <span>WebPage Image Upload (Upload layout image of how page has to be generated) *</span>
-                            </label>
-                            <p className="text-[11px] text-zinc-500 font-mono">
-                              Upload mockup/design image. The AI will generate a pleasant layout responsive across all devices (desktop, tablet, mobile).
-                            </p>
-                            <input
-                              type="file"
-                              accept="image/*"
-                              onChange={handleWebPageImageUpload}
-                              className="w-full text-xs text-zinc-600 font-mono file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-cyan-100 file:text-cyan-800 hover:file:bg-cyan-200 cursor-pointer"
-                            />
-                            {createEventForm.webpageImage && (
-                              <div className="pt-2 flex items-center space-x-3">
-                                <img src={createEventForm.webpageImage} alt="WebPage Layout Upload" className="h-16 w-24 object-cover rounded-lg border border-zinc-300 shadow-xs" />
-                                <span className="text-[10.5px] font-mono text-emerald-600 font-bold">✓ WebPage Layout Image Uploaded</span>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* 2. REGISTRATION LINK AND LAST DATE */}
-                          <div>
-                            <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                              Registration Link (URL) *
-                            </label>
-                            <input
-                              type="text"
-                              required
-                              value={createEventForm.registrationUrl}
-                              onChange={e => setCreateEventForm({ ...createEventForm, registrationUrl: e.target.value })}
-                              placeholder="https://registration-portal.org/event"
-                              className="w-full px-3.5 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white font-medium"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                              Registration Last Date *
-                            </label>
-                            <input
-                              type="date"
-                              required
-                              value={createEventForm.registrationDeadline}
-                              onChange={e => setCreateEventForm({ ...createEventForm, registrationDeadline: e.target.value })}
-                              className="w-full px-3.5 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white font-medium"
-                            />
-                          </div>
-
-                          {/* 3. SUBMISSION LINK AND LAST DATE */}
-                          <div>
-                            <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                              Paper / Abstract Submission Link (URL) *
-                            </label>
-                            <input
-                              type="text"
-                              required
-                              value={createEventForm.submissionUrl}
-                              onChange={e => setCreateEventForm({ ...createEventForm, submissionUrl: e.target.value })}
-                              placeholder="https://submissions.org/submit-abstract"
-                              className="w-full px-3.5 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white font-medium"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                              Submission Last Date *
-                            </label>
-                            <input
-                              type="date"
-                              required
-                              value={createEventForm.abstractDeadline}
-                              onChange={e => setCreateEventForm({ ...createEventForm, abstractDeadline: e.target.value })}
-                              className="w-full px-3.5 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white font-medium"
-                            />
-                          </div>
-
-                          {/* 4. DOWNLOAD CERTIFICATE LINK & SOUVENIR LINK */}
-                          <div>
-                            <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                              Download Certificate Link (If any)
-                            </label>
-                            <input
-                              type="text"
-                              value={createEventForm.certificateUrl}
-                              onChange={e => setCreateEventForm({ ...createEventForm, certificateUrl: e.target.value })}
-                              placeholder="https://certificates-server.org/download"
-                              className="w-full px-3.5 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white font-medium"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                              Download Souvenir Link (If any)
-                            </label>
-                            <input
-                              type="text"
-                              value={createEventForm.souvenirUrl}
-                              onChange={e => setCreateEventForm({ ...createEventForm, souvenirUrl: e.target.value })}
-                              placeholder="https://souvenirs-server.org/souvenir.pdf"
-                              className="w-full px-3.5 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white font-medium"
-                            />
-                          </div>
-
-                          {/* 5. SHORTENED UNIQUE EVENT PAGE NAME / SLUG */}
-                          <div className="md:col-span-2 bg-zinc-50 dark:bg-zinc-900/60 p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800">
-                            <label className="block text-xs font-bold text-zinc-900 dark:text-white mb-1">
-                              Shortened Unique Page Name (URL Slug) *
-                            </label>
-                            <div className="flex items-center space-x-2">
-                              <span className="text-[11px] font-mono text-zinc-400">http://localhost:3001/scientificevents/</span>
-                              <input
-                                type="text"
-                                required
-                                value={createEventForm.slug}
-                                onChange={e => setCreateEventForm({ ...createEventForm, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "") })}
-                                placeholder="e.g. cardio-2026"
-                                className="flex-1 px-3 py-1.5 rounded-lg border border-cyan-300 dark:border-cyan-800 bg-white dark:bg-zinc-950 text-xs font-mono text-cyan-600 font-extrabold"
-                              />
-                            </div>
-                            <p className="text-[10px] text-zinc-500 font-mono mt-1">
-                              Unique shortened URL for this event page (e.g. http://localhost:3001/scientificevents/cardio-2026).
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* GENERATE / REPUBLISH PAGE BUTTON */}
-                        <div className="pt-4 border-t border-zinc-100 dark:border-zinc-900 flex items-center justify-between">
-                          {editingEventId ? (
-                            <button
-                              type="button"
-                              onClick={handleCancelEventEdit}
-                              className="px-4 py-2 rounded-xl border border-zinc-300 dark:border-zinc-800 text-xs font-bold text-zinc-600 hover:bg-zinc-100 cursor-pointer"
-                            >
-                              Cancel Editing
-                            </button>
-                          ) : (
-                            <div />
-                          )}
-
-                          <button
-                            type="submit"
-                            disabled={submittingEvent}
-                            className="px-8 py-3 rounded-xl bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-700 hover:to-teal-700 text-white font-mono text-xs font-bold flex items-center space-x-2.5 shadow-md transition-all cursor-pointer"
-                          >
-                            <Sparkles className="w-4 h-4" />
-                            <span>{editingEventId ? "✨ Update & Republish Page" : "✨ Generate Page"}</span>
-                          </button>
-                        </div>
-                      </form>
-                    </div>
-
-                    {/* CREATED SCIENTIFIC EVENT PAGES LIST (BELOW THE FORM) */}
-                    <div className="bg-white dark:bg-zinc-950 p-6 sm:p-8 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm space-y-4">
-                      <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-900 pb-3">
-                        <div>
-                          <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase font-mono flex items-center space-x-2">
-                            <Calendar className="w-4 h-4 text-cyan-600" />
-                            <span>Created Scientific Event Pages ({createdEventsList.length})</span>
-                          </h3>
-                          <p className="text-xs text-zinc-500 mt-0.5">
-                            Edit content anytime (Page info, Registration link/date, Submission link/date, Certificates, Souvenirs) and republish.
-                          </p>
-                        </div>
-
-                        <span className="px-2.5 py-1 rounded bg-cyan-100 dark:bg-cyan-950 text-cyan-800 dark:text-cyan-200 font-mono text-[10px] font-bold">
-                          {createdEventsList.length} Event Pages Published
-                        </span>
-                      </div>
-
-                      {createdEventsList.length === 0 ? (
-                        <div className="text-center py-8 text-xs text-zinc-400 font-mono">
-                          No Scientific Event pages created yet. Use the form above to generate your first page.
-                        </div>
-                      ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {createdEventsList.map(evt => {
-                            const eventSlug = evt.slug || evt.title?.toLowerCase().replace(/[^a-z0-9]+/g, "-") || evt.id;
-                            const fullUrl = `http://localhost:3001/scientificevents/${eventSlug}`;
-                            const isBeingEdited = editingEventId === evt.id;
-
-                            return (
-                              <div
-                                key={evt.id}
-                                className={`p-5 rounded-2xl border transition-all flex flex-col justify-between space-y-3 ${
-                                  isBeingEdited
-                                    ? "bg-cyan-50/70 dark:bg-cyan-950/60 border-cyan-500 shadow-sm"
-                                    : "bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 hover:border-cyan-300"
-                                }`}
-                              >
-                                <div className="space-y-2">
-                                  <div className="flex items-center justify-between">
-                                    <span className="px-2 py-0.5 rounded text-[9.5px] font-mono font-extrabold uppercase bg-cyan-100 text-cyan-800 dark:bg-cyan-950 dark:text-cyan-200">
-                                      {evt.eventType || "Conference"}
-                                    </span>
-                                    <span className="text-[10px] font-mono text-purple-600 font-bold">
-                                      {evt.cmeCredits} CME Hours
-                                    </span>
-                                  </div>
-
-                                  <h4 className="text-xs font-extrabold text-zinc-900 dark:text-white leading-snug line-clamp-2">
-                                    {evt.title}
-                                  </h4>
-
-                                  <div className="text-[10.5px] font-mono text-cyan-700 dark:text-cyan-400 truncate">
-                                    URL: <a href={`/scientificevents/${eventSlug}`} target="_blank" rel="noopener noreferrer" className="underline font-bold">{fullUrl}</a>
-                                  </div>
-
-                                  <div className="grid grid-cols-2 gap-2 text-[10px] font-mono text-zinc-500 pt-1">
-                                    <div>Reg Last Date: <span className="font-bold text-zinc-700 dark:text-zinc-300">{evt.registrationDeadline || evt.endDate}</span></div>
-                                    <div>Sub Last Date: <span className="font-bold text-zinc-700 dark:text-zinc-300">{evt.abstractDeadline || evt.endDate}</span></div>
-                                  </div>
-                                </div>
-
-                                <div className="pt-3 border-t border-zinc-100 dark:border-zinc-900 flex items-center justify-between">
-                                  <div className="flex space-x-2">
-                                    <button
-                                      onClick={() => handleEditEvent(evt)}
-                                      className="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white font-mono text-[10.5px] font-bold flex items-center space-x-1 transition-all cursor-pointer"
-                                    >
-                                      <Edit3 className="w-3 h-3" />
-                                      <span>Edit & Republish</span>
-                                    </button>
-
-                                    <button
-                                      onClick={() => handleDeleteEvent(evt.id)}
-                                      className="p-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 text-[10px] font-bold transition-all cursor-pointer"
-                                      title="Delete Event Page"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
-
-                                  <a
-                                    href={`/scientificevents/${eventSlug}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-[10.5px] font-mono font-bold text-cyan-600 hover:underline flex items-center space-x-1"
-                                  >
-                                    <span>View Live Page</span>
-                                    <ExternalLink className="w-3 h-3" />
-                                  </a>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
                 {/* 4. MANAGE SCIENTIFIC EVENT TAB (Created right below Create Pages) */}
                 {activeTab === "manage_scientific_events" && (
                   <div className="max-w-4xl mx-auto space-y-6 pb-8 font-sans">
@@ -3148,13 +2925,20 @@ export default function AdminCMS({ onClose, session }: AdminCMSProps) {
                         >
                           <div>
                             <div className="flex items-center justify-between mb-2">
-                              <span className={`px-2 py-0.5 rounded text-[9.5px] font-mono font-bold uppercase tracking-wider ${
-                                art.status === "published"
-                                  ? "bg-emerald-100 text-emerald-700"
-                                  : "bg-amber-100 text-amber-700"
-                              }`}>
-                                {art.status === "published" ? "✓ PUBLISHED" : "⏳ DRAFT"}
-                              </span>
+                              <div className="flex items-center space-x-2">
+                                <span className={`px-2 py-0.5 rounded text-[9.5px] font-mono font-bold uppercase tracking-wider ${
+                                  art.status === "published"
+                                    ? "bg-emerald-100 text-emerald-700"
+                                    : "bg-amber-100 text-amber-700"
+                                }`}>
+                                  {art.status === "published" ? "✓ PUBLISHED" : "⏳ DRAFT"}
+                                </span>
+                                {art.sourceFeature && (
+                                  <span className="px-2 py-0.5 rounded bg-indigo-50 text-indigo-600 text-[9.5px] font-mono font-bold border border-indigo-100">
+                                    {art.sourceFeature}
+                                  </span>
+                                )}
+                              </div>
 
                               <div className="flex items-center space-x-2 text-zinc-400">
                                 <button
@@ -3177,6 +2961,11 @@ export default function AdminCMS({ onClose, session }: AdminCMSProps) {
                             <h4 className="text-sm font-bold text-zinc-900 dark:text-white leading-snug line-clamp-2 mb-1.5">
                               {art.headline}
                             </h4>
+                            {(art.author_name || art.author_email) && (
+                              <div className="text-[10px] font-mono text-zinc-500 mb-2">
+                                Pub: {art.author_name || "Unknown"} {art.author_email ? `(${art.author_email})` : ""}
+                              </div>
+                            )}
                             <p className="text-xs text-zinc-500 dark:text-zinc-400 line-clamp-2 leading-relaxed">
                               {art.summary30s}
                             </p>
@@ -3456,7 +3245,14 @@ export default function AdminCMS({ onClose, session }: AdminCMSProps) {
                               {/* Content Below */}
                               <div className="p-4 space-y-2">
                                 <div className="flex justify-between items-start">
-                                  <h4 className="font-bold text-sm text-zinc-900 dark:text-white">{ad.title}</h4>
+                                  <div className="flex flex-col">
+                                    <h4 className="font-bold text-sm text-zinc-900 dark:text-white">{ad.title}</h4>
+                                    {(ad.author_name || ad.author_email) && (
+                                      <div className="text-[10px] font-mono text-zinc-500 mt-1">
+                                        Pub: {ad.author_name || "Unknown"} {ad.author_email ? `(${ad.author_email})` : ""}
+                                      </div>
+                                    )}
+                                  </div>
                                   <div className="flex items-center space-x-2">
                                     <button
                                       onClick={() => handleAdEdit(ad)}
@@ -3522,6 +3318,11 @@ export default function AdminCMS({ onClose, session }: AdminCMSProps) {
                             </div>
                           </div>
                           <h4 className="text-sm font-bold text-zinc-900 dark:text-white">{art.headline}</h4>
+                          {(art.author_name || art.author_email) && (
+                            <div className="text-[10px] font-mono text-zinc-500 my-1">
+                              Pub: {art.author_name || "Unknown"} {art.author_email ? `(${art.author_email})` : ""}
+                            </div>
+                          )}
                           <p className="text-xs text-zinc-600 dark:text-zinc-400">{art.summary30s}</p>
                         </div>
                       ))
@@ -3550,9 +3351,59 @@ export default function AdminCMS({ onClose, session }: AdminCMSProps) {
                     )}
                   </div>
                 )}
+                {/* 8. PROFILE SETTINGS TAB */}
+                {activeTab === "profile" && (
+                  <UserProfileEditor 
+                    session={session} 
+                    onBack={() => setActiveTab("profile")} 
+                  />
+                )}
               </>
             )}
 
+            {showImageSelector && (
+              <ImageSelectorModal
+                onClose={() => setShowImageSelector(false)}
+                onSelect={(url) => {
+                  if (imageSelectorTarget === 'edit' && editingArticle) {
+                    setEditingArticle({ ...editingArticle, imageUrl: url, image_url: url } as any);
+                  } else if (imageSelectorTarget === 'editorial') {
+                    setEditorialForm({ ...editorialForm, imageUrl: url });
+                  } else if (imageSelectorTarget === 'generated' && editingGeneratedArticle && generatedImageKey) {
+                    setEditingGeneratedArticle((prev: any) => ({
+                      ...prev,
+                      data: { ...prev.data, [generatedImageKey]: url }
+                    }));
+                  }
+                  setShowImageSelector(false);
+                }}
+              />
+            )}
+            
+            {editorialImageTargetId && (
+              <ImageSelectorModal
+                onClose={() => setEditorialImageTargetId(null)}
+                onSelect={async (url) => {
+                  try {
+                    const res = await fetchWithAuth(`/api/admin/editorials/${editorialImageTargetId}`, {
+                      method: 'PUT',
+                      headers: {
+                        'Content-Type': 'application/json'
+                      },
+                      body: JSON.stringify({ imageUrl: url })
+                    });
+                    if (res.ok) {
+                      fetchData();
+                    } else {
+                      alert("Failed to update image");
+                    }
+                  } catch(e) {
+                    console.error(e);
+                  }
+                  setEditorialImageTargetId(null);
+                }}
+              />
+            )}
           </div>
         </main>
       </div>

@@ -10,7 +10,6 @@ import {
   Sparkles, Layers, FileText, Check, ShieldCheck, AlertTriangle
 } from "lucide-react";
 import { ScientificEvent } from "../types";
-import { supabase, mapEventFromDB } from "../lib/supabase";
 
 interface ScientificEventPageProps {
   slug: string;
@@ -35,28 +34,27 @@ export default function ScientificEventPage({ slug, onBack }: ScientificEventPag
 
   useEffect(() => {
     setLoading(true);
-    const fetchEvent = async () => {
-      try {
-        const { data, error } = await supabase.from('scientific_events').select('*');
-        if (error) throw error;
-        
-        if (data) {
-          const mapped = data.map(mapEventFromDB);
-          const found = mapped.find(e => 
-            (e.slug && e.slug.toLowerCase() === slug.toLowerCase()) || 
-            e.id === slug ||
-            e.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").includes(slug.toLowerCase())
-          );
-          setEvent(found || mapped[0] || null);
+    fetch("/api/scientific-events")
+      .then(res => res.json())
+      .then((data: ScientificEvent[]) => {
+        const found = data.find(e => 
+          (e.slug && e.slug.toLowerCase() === slug.toLowerCase()) || 
+          e.id === slug ||
+          e.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").includes(slug.toLowerCase())
+        );
+        if (found) {
+          setEvent(found);
+        } else {
+          // Fallback to first available event if matching slug loading mock
+          setEvent(data[0] || null);
         }
-      } catch (err) {
+        setLoading(false);
+      })
+      .catch(err => {
         console.error(err);
         setError("Failed to load event page details.");
-      } finally {
         setLoading(false);
-      }
-    };
-    fetchEvent();
+      });
   }, [slug]);
 
   if (loading) {
@@ -143,7 +141,7 @@ export default function ScientificEventPage({ slug, onBack }: ScientificEventPag
         <div className="flex items-center space-x-2 text-xs font-mono text-zinc-400">
           <span>URL:</span>
           <span className="font-bold text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-950/60 px-2 py-0.5 rounded border border-cyan-200 dark:border-cyan-800">
-            {typeof window !== 'undefined' ? window.location.origin : 'https://healicwire.in'}/scientificevents/{event.slug || slug}
+            http://localhost:3001/scientificevents/{event.slug || slug}
           </span>
         </div>
       </div>
@@ -151,13 +149,13 @@ export default function ScientificEventPage({ slug, onBack }: ScientificEventPag
       {/* HERO SECTION WITH WEBPAGE IMAGE DESIGN & BANNER */}
       <div className="bg-white dark:bg-zinc-950 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-xl overflow-hidden">
         
-        {/* Banner image preview if WebPage Image uploaded */}
+        {/* Layout image preview if WebPage Image uploaded */}
         {event.webpageImage && (
-          <div className="w-full bg-zinc-900 overflow-hidden border-b border-zinc-200 dark:border-zinc-800 max-h-80">
+          <div className="w-full bg-zinc-900 overflow-hidden border-b border-zinc-200 dark:border-zinc-800">
             <img 
               src={event.webpageImage} 
               alt={event.title} 
-              className="w-full h-full object-cover opacity-95" 
+              className="w-full h-auto object-contain opacity-100" 
             />
           </div>
         )}

@@ -133,6 +133,8 @@ export default function RepositoryPage() {
     if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
       try {
         await navigator.share({
+          title: item.title,
+          text: item.description,
           files: [file]
         });
         return;
@@ -230,10 +232,10 @@ export default function RepositoryPage() {
                 className="relative flex flex-col rounded-xl overflow-hidden shadow-lg group bg-black"
               >
                 <div className="relative aspect-video w-full overflow-hidden">
-                  <img 
+                  <img onError={(e) => { e.currentTarget.style.display = 'none'; }} 
                     src={item.img} 
                     alt={item.title} 
-                    className="card-bg-img absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" 
+                    className="card-bg-img absolute inset-0 w-full h-full object-contain group-hover:scale-105 transition-transform duration-700" 
                   />
                   {/* No overlays - display image only */}
                 </div>

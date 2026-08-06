@@ -71,7 +71,7 @@ const SLIDES: WhatWeDoSlide[] = [
     description: "Hub for local grand rounds, national medical congresses, and digital pass logging for mandatory CME credit accumulation.",
     metric: "100%",
     metricLabel: "Verified CME Credits",
-    tabKey: "events",
+    tabKey: "scientific-events",
     icon: Award,
     accentColor: "text-amber-600 dark:text-amber-400",
     bgGradient: "from-amber-500/10 via-amber-500/5 to-transparent dark:from-amber-950/40 dark:via-amber-950/20"

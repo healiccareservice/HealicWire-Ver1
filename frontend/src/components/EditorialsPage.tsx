@@ -59,8 +59,11 @@ export default function EditorialsPage({ onSelectArticle }: EditorialsPageProps)
           if (profilesRes.ok) {
             const profilesData = await profilesRes.json();
             const profMap: Record<string, any> = {};
+            const normalizeName = (name: string) => (name || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
             profilesData.forEach((p: any) => {
-              if (p.name) profMap[p.name] = p;
+              if (p.name) profMap[normalizeName(p.name)] = p;
+              if (p.name && normalizeName(p.name).includes('narayana')) profMap['drnarayanak'] = p;
+              if (p.name && normalizeName(p.name).includes('narayana')) profMap['drknarayanak'] = p;
               if (p.email) profMap[p.email] = p;
             });
             setProfiles(profMap);
@@ -182,11 +185,12 @@ export default function EditorialsPage({ onSelectArticle }: EditorialsPageProps)
           {filteredEditorials.map(ed => {
             const isExpanded = expandedIds.includes(ed.id);
             const isSaved = savedIds.includes(ed.id);
-            const authorProfile = profiles[ed.sourceName || ""] || {
+            const normalizeLocal = (n: string) => (n || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+            const authorProfile = profiles[normalizeLocal(ed.sourceName)] || {
               name: ed.sourceName || "Dr. K. Narayana K",
-              degree: ed.sourceName === "Dr. K. Narayana K" ? "MBBS, MD, DipIBLM, FHPE" : "",
-              role: ed.sourceName === "Dr. K. Narayana K" ? "Editor-in-Chief & Lead Strategist" : "Editorial Board Member",
-              avatar_url: ed.sourceName === "Dr. K. Narayana K" ? "/images/dr_narayana.jpg" : ""
+              degree: normalizeLocal(ed.sourceName).includes("narayana") ? "MBBS, MD, DipIBLM, FHPE" : "",
+              role: normalizeLocal(ed.sourceName).includes("narayana") ? "Editor-in-Chief & Lead Strategist" : "Editorial Board Member",
+              avatar_url: normalizeLocal(ed.sourceName).includes("narayana") ? "/images/dr_narayana.jpg" : ""
             };
 
             return (
@@ -229,7 +233,7 @@ export default function EditorialsPage({ onSelectArticle }: EditorialsPageProps)
                       <img 
                         src={ed.imageUrl} 
                         alt={ed.headline}
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-contain"
                       />
                     </div>
                   )}

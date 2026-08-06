@@ -127,6 +127,7 @@ export interface Article {
   whyThisMatters: WhyThisMatters;
   whatChanged?: WhatChanged;
   impactScores: ImpactScores;
+  spotlight?: boolean;
   indiaRelevance: {
     status: "Directly applicable" | "Partially applicable" | "Requires local adaptation" | "Not currently applicable" | "Indian guidance awaited";
     explanation: string;
@@ -142,11 +143,49 @@ export interface Article {
   clinicalImpactScore?: number;
   views: number;
   author_name?: string;
+  author_email?: string;
   author_qualifications?: string;
   author_title?: string;
+  author_avatar_url?: string;
   seoDescription?: string;
   keywords?: string[];
   providerId?: string;
+  
+  // For Treatment Update AI format
+  title?: string;
+  clinicalSpecialty?: string;
+  clinicalImpact?: string;
+  clinicalQuestion?: string;
+  studySummary?: string;
+  keyTreatmentUpdate?: string;
+  clinicalImplications?: string;
+  patientPopulation?: string;
+  strengthOfEvidence?: string;
+  limitations?: string;
+  bottomLine?: string[];
+  source?: string;
+  officialReferences?: string[];
+  
+  // For Pharma & Drugs AI format
+  updateCategory?: string;
+  issuingOrganization?: string;
+  releaseDate?: string;
+  drugName?: string;
+  therapeuticArea?: string;
+  summary?: string;
+  clinicalSignificance?: string;
+  recommendedActions?: string[];
+  affectedPatientPopulation?: string;
+  regulatoryStatus?: string;
+  evidenceSource?: string;
+  officialReference?: string;
+
+  // For Health Care Providers AI format
+  hospitalAgency?: string;
+  keyHighlights?: string[];
+  clinicalOperationalImpact?: string;
+  applicability?: string;
+  currentStatus?: string;
 }
 
 export interface Provider {
@@ -168,25 +207,45 @@ export interface Provider {
 
 export interface LivingGuideline {
   id: string;
-  condition: string; // Diabetes, Hypertension, Tuberculosis, Sepsis, Asthma, COPD, etc.
-  issuingOrganization: string; // WHO, ICMR, CDSCO, ADA, ESC, etc.
-  currentRecommendation: string;
+  condition?: string; // Diabetes, Hypertension, Tuberculosis, Sepsis, Asthma, COPD, etc.
+  issuingOrganization?: string; // WHO, ICMR, CDSCO, ADA, ESC, etc.
+  currentRecommendation?: string;
   previousRecommendation?: string;
   lastUpdated: string;
   reasonForChange: string;
   indiaRelevance: string;
   references: string[];
+  title?: string;
+  publicationYear?: number;
+  targetAudience?: string[];
+  keyClinicalRecommendations?: string[];
+  imageUrl?: string;
+  spotlight?: boolean;
+  whatsNew?: string;
+  clinicalPearls?: string[];
+  evidenceLevel?: string;
 }
 
 export interface HospitalAlert {
   id: string;
-  headline: string;
-  severity: ImpactSeverity;
-  urgency: "Routine" | "Immediate" | "Critical";
-  departmentsAffected: string[];
-  recommendedAction: string;
-  source: string;
-  date: string;
+  headline?: string;
+  severity?: ImpactSeverity | string;
+  urgency?: string;
+  departmentsAffected?: string[];
+  recommendedAction?: string;
+  source?: string;
+  date?: string;
+  title?: string;
+  alertCategory?: string;
+  summary?: string;
+  whoIsAffected?: string[];
+  recommendedHospitalActions?: string[];
+  departmentsImpacted?: string[];
+  effectiveDate?: string;
+  geographicCoverage?: string;
+  currentStatus?: string;
+  evidenceSource?: string;
+  officialReference?: string;
 }
 
 export interface CorrectionReport {
@@ -243,6 +302,19 @@ export interface ScientificEvent {
   scope: "Local" | "Nationwide" | "International";
   eventType: string; // e.g., Conference, CME, Workshop, Webinar, Grand Rounds, etc.
   targetProfessions?: string[]; // e.g., MBBS, MD/MS, DM/MCh, Nursing, Dentistry, etc.
+  
+  // For AI generated fields
+  medicalSpecialty?: string;
+  geographicCategory?: string;
+  eventDates?: string;
+  mode?: string;
+  targetAudience?: string[];
+  keyTopics?: string;
+  whyAttend?: string[];
+  importantDeadlines?: any;
+  cmeAccreditation?: string;
+  registrationStatus?: string;
+  officialWebsite?: string;
   startDate: string;
   endDate: string;
   duration?: string;
@@ -267,6 +339,7 @@ export interface ScientificEvent {
   isLive?: boolean;
   status?: "Approved" | "Pending" | "Rejected";
   imageUrl?: string;
+  spotlight?: boolean;
   posterUrl?: string;
   keynoteSpeakers?: string[];
   speakerProfiles?: EventSpeaker[];
@@ -281,6 +354,9 @@ export interface ScientificEvent {
   aiSummary?: AiSummaryData;
   hasDownloadableNotes?: boolean;
   slug?: string;
+  seoMetadata?: any;
+  galleryUrls?: string[];
+  brochureUrl?: string;
   submissionUrl?: string;
   certificateUrl?: string;
   souvenirUrl?: string;
