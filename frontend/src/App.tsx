@@ -330,7 +330,7 @@ export default function App() {
 
     // Do not open ArticleDetail modal for Editorials or Clinical Insights pages.
     // Let those pages handle expanding the article directly.
-    if (window.location.pathname.startsWith('/editorials') || window.location.pathname.startsWith('/clinical-insights')) {
+    if (window.location.pathname.startsWith('/editorials') || window.location.pathname.startsWith('/clinicalinsights')) {
       return;
     }
 

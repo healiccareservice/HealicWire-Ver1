@@ -429,7 +429,13 @@ async function startServer() {
       
       if (data) {
         if (data.category === 'Editorial') redirectPath = '/editorials';
-        else if (data.category === 'Clinical Insights') redirectPath = '/clinical-insights';
+        else if (data.category === 'Clinical Insights') redirectPath = '/clinicalinsights';
+        else if (data.category === 'Treatment Update') redirectPath = '/treatmentupdate';
+        else if (data.category === 'Scientific Events') redirectPath = '/scientificevents';
+        else if (data.category === 'Pharma and Drugs') redirectPath = '/pharmadrugs';
+        else if (data.category === 'Current Guidelines') redirectPath = '/guidelines';
+        else if (data.category === 'Healthcare Providers') redirectPath = '/providers';
+        else if (data.category === 'Hospital Intelligence') redirectPath = '/alerts';
       }
       
       // If not found, try editorials
@@ -443,7 +449,7 @@ async function startServer() {
       if (!data) {
         const resp = await supabaseAdmin.from('clinical_insights').select('*').eq('id', id).maybeSingle();
         data = resp.data;
-        if (data) redirectPath = '/clinical-insights';
+        if (data) redirectPath = '/clinicalinsights';
       }
 
       const host = req.headers['x-forwarded-host'] || req.headers.host || '';
