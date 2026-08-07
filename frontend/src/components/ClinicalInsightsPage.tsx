@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { UserCheck, BookOpen, Search, Sparkles, ChevronDown, ChevronUp, Bookmark, BookmarkCheck, Share2, Award, Clock, ArrowRight, CheckCircle, Lightbulb } from "lucide-react";
 import { Article } from "../types";
 import { supabase, mapArticleFromDB } from "../lib/supabase";
@@ -47,9 +47,16 @@ export default function ClinicalInsightsPage({ onSelectArticle }: ClinicalInsigh
     }
   }, [insights]);
 
+  const hasInitializedUrl = useRef(false);
+
   // Sync URL with expanded insights
   useEffect(() => {
     if (insights.length > 0) {
+      if (!hasInitializedUrl.current) {
+        hasInitializedUrl.current = true;
+        return;
+      }
+      
       if (expandedIds.length > 0) {
         const lastExpanded = expandedIds[expandedIds.length - 1];
         window.history.replaceState({}, document.title, window.location.pathname + '?article=' + lastExpanded);
