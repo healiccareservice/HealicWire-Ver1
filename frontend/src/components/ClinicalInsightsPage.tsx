@@ -94,29 +94,6 @@ export default function ClinicalInsightsPage({ onSelectArticle }: ClinicalInsigh
         }
 
         if (finalData) {
-          const authorsMap: any = {
-            "Advances in Continuous Glucose Monitoring (CGM) for Type 2 Diabetes Management": { name: 'Dr. Priya Nair', qual: 'MBBS, MD (General Medicine), DM (Endocrinology)', title: 'Consultant Endocrinologist & Diabetologist', image: 'https://randomuser.me/api/portraits/women/44.jpg' },
-            "Redefining HFpEF Management: From Diagnostic Dilemmas to Targeted Phenotype-Driven Pharmacotherapy": { name: 'Dr. Arjun Sharma', qual: 'MBBS, MD (General Medicine), DM (Cardiology)', title: 'Consultant Cardiologist', image: 'https://randomuser.me/api/portraits/men/32.jpg' },
-            "Optimizing Disease-Modifying Therapy in Early-Stage Alzheimer's Disease: Biomarker Protocols, Amyloid-Related Imaging Abnormalities (ARIA), and Practical Management Algorithms": { name: 'Dr. Rahul Mehta', qual: 'MBBS, MD (General Medicine), DM (Neurology)', title: 'Consultant Neurologist', image: 'https://randomuser.me/api/portraits/men/45.jpg' },
-            "SGLT2 Inhibitors and Non-Diabetic Chronic Kidney Disease: Redefining Renal Protection and Clinical Pathways": { name: 'Dr. Sneha Iyer', qual: 'MBBS, MD (General Medicine), DM (Nephrology)', title: 'Consultant Nephrologist', image: 'https://randomuser.me/api/portraits/women/68.jpg' },
-            "Paradigm Shift in MASH Management: Integrating Targeted Pharmacotherapy and Incretin Agonists into Gastroenterology Practice": { name: 'Dr. Vikram Reddy', qual: 'MBBS, MD (General Medicine), DM (Gastroenterology)', title: 'Consultant Gastroenterologist', image: 'https://randomuser.me/api/portraits/men/22.jpg' },
-            "Redefining the HER2 Paradigm: Clinical Insights into Antibody-Drug Conjugates for HER2-Low Metastatic Breast Cancer": { name: 'Dr. Ananya Banerjee', qual: 'MBBS, MD (General Medicine), DM (Medical Oncology)', title: 'Consultant Medical Oncologist', image: 'https://randomuser.me/api/portraits/women/33.jpg' },
-            "Navigating Relapsed/Refractory Multiple Myeloma: The Paradigm Shift Towards Bispecific T-Cell Engagers and CAR-T Therapies": { name: 'Dr. Karthik Rao', qual: 'MBBS, MD (General Medicine), DM (Clinical Hematology)', title: 'Consultant Hematologist', image: 'https://randomuser.me/api/portraits/men/55.jpg' },
-            "Resetting the Autoreactive Immune Memory: CD19-Targeted CAR-T Cell Therapy and B-Cell Depletion Paradigms in Refractory Systemic Lupus Erythematosus": { name: 'Dr. Meera Joshi', qual: 'MBBS, MD (General Medicine), DM (Clinical Immunology & Rheumatology)', title: 'Consultant Rheumatologist', image: 'https://randomuser.me/api/portraits/women/29.jpg' },
-            "Navigating Phenotypic Heterogeneity in Severe Refractory Asthma: Precision Biologic Selection and Biomarker Integration": { name: 'Dr. Sandeep Kulkarni', qual: 'MBBS, MD (General Medicine), DM (Pulmonary, Critical Care & Sleep Medicine)', title: 'Consultant Pulmonologist', image: 'https://randomuser.me/api/portraits/men/66.jpg' },
-            "First-Line Whole Genome Sequencing in Undiagnosed Genetic Disorders: Shifting the Paradigm from Diagnostic Odysseys to Precision Medicine": { name: 'Dr. Ritu Verma', qual: 'MBBS, MD (General Medicine), DM (Medical Genetics)', title: 'Consultant Medical Geneticist', image: 'https://randomuser.me/api/portraits/women/12.jpg' },
-            "Paradigm Shift in Endourology: Thulium Fiber Laser versus Holmium:YAG Laser in Urolithiasis and BPH Management": { name: 'Dr. Nikhil Desai', qual: 'MBBS, MS (General Surgery), MCh (Urology)', title: 'Consultant Urologist', image: 'https://randomuser.me/api/portraits/men/17.jpg' },
-            "Awake Craniotomy and Intraoperative Functional Mapping: Balancing Oncological Resection with Functional Preservation in Eloquent Cortex Gliomas": { name: 'Dr. Pooja Kapoor', qual: 'MBBS, MS (General Surgery), MCh (Neurosurgery)', title: 'Consultant Neurosurgeon', image: 'https://randomuser.me/api/portraits/women/55.jpg' },
-            "Evolving Paradigms in Mitral Valve Repair: Minimally Invasive Thoracoscopic vs. Conventional Median Sternotomy Approaches": { name: 'Dr. Ajay Menon', qual: 'MBBS, MS (General Surgery), MCh (Cardiothoracic & Vascular Surgery)', title: 'Consultant Cardiothoracic Surgeon', image: 'https://randomuser.me/api/portraits/men/19.jpg' },
-            "Navigating Organ Preservation in Locally Advanced Rectal Cancer: A Surgical Oncologist’s Perspective on Total Neoadjuvant Therapy and the Watch-and-Wait Protocol": { name: 'Dr. Kavita Patil', qual: 'MBBS, MS (General Surgery), MCh (Surgical Oncology)', title: 'Consultant Surgical Oncologist', image: 'https://randomuser.me/api/portraits/women/22.jpg' },
-            "Targeted Muscle Reinnervation (TMR) and Regenerative Peripheral Nerve Interfaces (RPNI): Paradigm Shifts in Neuroma Prevention and Amputee Rehabilitation": { name: 'Dr. Rohit Chandra', qual: 'MBBS, MS (General Surgery), MCh (Plastic & Reconstructive Surgery)', title: 'Consultant Plastic & Reconstructive Surgeon', image: 'https://randomuser.me/api/portraits/men/12.jpg' },
-            "Navigating the Paradigm Shift in Pediatric Developmental and Epileptic Encephalopathies: From Anti-Seizure Medications to Precision Disease-Modifying Therapies": { name: 'Dr. Neha Gupta', qual: 'MBBS, MD (Pediatrics), DM (Pediatric Neurology)', title: 'Consultant Pediatric Neurologist', image: 'https://randomuser.me/api/portraits/women/61.jpg' },
-            "Navigating Carbapenem-Resistant Enterobacterales (CRE) Infections: Newer Beta-Lactam/Beta-Lactamase Inhibitor Combinations and Stewardship Strategies": { name: 'Dr. Harish Bhat', qual: 'MBBS, MD (General Medicine), DM (Infectious Diseases)', title: 'Consultant Infectious Disease Specialist', image: 'https://randomuser.me/api/portraits/men/77.jpg' },
-            "Navigating DOAC Dosing Dilemmas in Extreme Obesity and End-Stage Kidney Disease: A Pharmacokinetic and Pharmacodynamic Paradigm Shift": { name: 'Dr. Shalini Krishnan', qual: 'MBBS, MD (General Medicine), DM (Clinical Pharmacology)', title: 'Consultant Clinical Pharmacologist', image: 'https://randomuser.me/api/portraits/women/88.jpg' },
-            "Navigating Heterogeneity in Septic Shock: Phenotype-Driven Resuscitation and Hemodynamic Tailoring in the Modern ICU": { name: 'Dr. Vivek Agarwal', qual: 'MBBS, MD (General Medicine), DM (Critical Care Medicine)', title: 'Consultant Intensivist & Critical Care Specialist', image: 'https://randomuser.me/api/portraits/men/91.jpg' },
-            "Genicular Artery Embolization (GAE) in Knee Osteoarthritis: Clinical Efficacy, Technical Nuances, and Practice Takeaways": { name: 'Dr. Aditi Singh', qual: 'MBBS, MD (Radiodiagnosis), Fellowship in Interventional Radiology', title: 'Consultant Interventional Radiologist', image: 'https://randomuser.me/api/portraits/women/90.jpg' }
-          };
-          
           let fetchedProfiles: Record<string, any> = {};
           try {
             const profilesRes = await fetch('/api/profiles');
@@ -155,9 +132,8 @@ export default function ClinicalInsightsPage({ onSelectArticle }: ClinicalInsigh
               authorName = dbProfile.name;
             }
             
-            const mappedAuthor = authorsMap[headline];
             if (!authorName) {
-              authorName = mappedAuthor ? mappedAuthor.name : d.author_name;
+              authorName = d.author_name;
             }
             
             if (!dbProfile && authorName) {
@@ -220,10 +196,10 @@ export default function ClinicalInsightsPage({ onSelectArticle }: ClinicalInsigh
               sourceName: 'HealicWire Experts Board',
               isEditorial: true,
               imageUrl: d.image_url,
-              author_name: authorName,
-              author_qualifications: dbProfile?.degree || (mappedAuthor ? mappedAuthor.qual : d.author_qualifications),
-              author_title: dbProfile?.role || (mappedAuthor ? mappedAuthor.title : d.author_title),
-              author_image: dbProfile?.avatar_url || (mappedAuthor ? mappedAuthor.image : "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=400&q=80")
+              author_name: authorName || "HealicWire Editorial",
+              author_qualifications: dbProfile ? dbProfile.qualifications : (d.author_qualifications || "Medical Content Board"),
+              author_title: dbProfile ? dbProfile.title : (d.author_title || "Verified Content"),
+              author_image: dbProfile ? dbProfile.avatar_url : (d.author_avatar_url || "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=400&q=80")
             } as Article & { author_image?: string };
           });
           const sortedMapped = mapped.sort((a: any, b: any) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());

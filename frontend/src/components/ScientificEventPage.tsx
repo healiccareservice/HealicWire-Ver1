@@ -45,8 +45,8 @@ export default function ScientificEventPage({ slug, onBack }: ScientificEventPag
         if (found) {
           setEvent(found);
         } else {
-          // Fallback to first available event if matching slug loading mock
-          setEvent(data[0] || null);
+          // No fallback to mock data; display event not found if not found
+          setEvent(null);
         }
         setLoading(false);
       })

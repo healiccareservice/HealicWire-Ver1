@@ -329,11 +329,10 @@ export default function ArticleDetail({
         <div className="lg:col-span-2 space-y-8">
           {/* Author Profile Banner */}
           {(article.category === "Clinical Insights" || article.category === "Editorial" || article.author_name) && (() => {
-            const isNarayana = (article.author_name || "").toLowerCase().includes("narayana");
-            const fallbackName = isNarayana ? "Dr Narayana K" : "Dr. Priya Nair";
-            const fallbackQuals = isNarayana ? "MBBS, MD, DipIBLM, FHPE" : "MBBS, MD (General Medicine), DM (Endocrinology)";
-            const fallbackTitle = isNarayana ? "Chief Editor" : "Consultant Endocrinologist & Diabetologist";
-            const fallbackImage = isNarayana ? "/images/dr_narayana.jpg" : "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=400&q=80";
+            const fallbackName = "HealicWire Editorial Team";
+            const fallbackQuals = "Medical Content Board";
+            const fallbackTitle = "Verified Content";
+            const fallbackImage = "/images/healicwire-official-logo.png";
 
             return (
               <div className="p-6 mb-6 rounded-2xl bg-gradient-to-r from-teal-900/10 via-emerald-900/10 to-cyan-900/10 dark:from-teal-950/50 dark:via-emerald-950/50 dark:to-cyan-950/50 border border-teal-200/80 dark:border-teal-800/80 shadow-xs flex flex-col sm:flex-row items-center sm:items-start gap-5">
