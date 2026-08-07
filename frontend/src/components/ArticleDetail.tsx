@@ -87,6 +87,18 @@ export default function ArticleDetail({
 
   // AI Learning Module Generation state
   const [generatingQuiz, setGeneratingQuiz] = useState(false);
+  const [localLearningModule, setLocalLearningModule] = useState<any>(article.learningModule || null);
+
+  useEffect(() => {
+    fetch(`/api/quizzes/${article.id}`)
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data && !data.error) {
+           setLocalLearningModule(data);
+        }
+      })
+      .catch(() => {});
+  }, [article.id]);
 
   // Correction Modal
   const [showCorrectionModal, setShowCorrectionModal] = useState(false);
@@ -163,9 +175,10 @@ export default function ArticleDetail({
       }
     })
       .then(res => res.json())
-      .then(() => {
+      .then(data => {
         setGeneratingQuiz(false);
-        onRefreshArticle(); // Refresh article object to populate learningModule
+        setLocalLearningModule(data);
+        onRefreshArticle();
       })
       .catch(err => {
         console.error("Quiz generation failed:", err);
@@ -232,7 +245,7 @@ export default function ArticleDetail({
 
   const handleShare = async () => {
     // Construct dynamic share URL targeting the backend OG generator
-    const origin = window.location.origin.includes('localhost') ? 'https://healicwire.in' : window.location.origin;
+    const origin = window.location.origin;
     const shareUrl = `${origin}/api/share/article/${article.id}`;
     
     // Only pass the URL and Title, allowing WhatsApp to natively generate a Link Preview
@@ -266,7 +279,17 @@ export default function ArticleDetail({
           className="flex items-center space-x-2 text-xs font-mono font-bold text-zinc-600 dark:text-zinc-450 hover:text-teal-600 dark:hover:text-teal-400 cursor-pointer transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Back to Intel Feed</span>
+          <span>
+            {(() => {
+              const path = window.location.pathname;
+              if (path.startsWith('/editorials')) return 'Back to Editorials';
+              if (path.startsWith('/clinical-insights')) return 'Back to Clinical Insights';
+              if (path.startsWith('/providers')) return 'Back to Healthcare Providers';
+              if (path.startsWith('/repository')) return 'Back to Repository';
+              if (path.startsWith('/events') || path.startsWith('/scientific-events')) return 'Back to Scientific Events';
+              return 'Back to Intel Feed';
+            })()}
+          </span>
         </button>
 
         <div className="flex items-center space-x-2">
@@ -304,27 +327,35 @@ export default function ArticleDetail({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* LEFT TWO COLUMNS: Headline, Summaries, Impact, Analysis */}
         <div className="lg:col-span-2 space-y-8">
-          {/* Author Profile Banner for Clinical Insights */}
-          {(article.category === "Clinical Insights" || article.author_name) && (
-            <div className="p-6 mb-6 rounded-2xl bg-gradient-to-r from-teal-900/10 via-emerald-900/10 to-cyan-900/10 dark:from-teal-950/50 dark:via-emerald-950/50 dark:to-cyan-950/50 border border-teal-200/80 dark:border-teal-800/80 shadow-xs flex flex-col sm:flex-row items-center sm:items-start gap-5">
-              <img
-                src={article.author_avatar_url || "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=400&q=80"}
-                alt={article.author_name || "Dr. Priya Nair"}
-                className="w-20 h-20 rounded-full object-cover border-3 border-teal-600 shadow-md shrink-0"
-              />
-              <div className="space-y-1.5 text-center sm:text-left flex-1">
-                <h2 className="text-lg font-extrabold text-zinc-900 dark:text-white">
-                  {article.author_name || "Dr. Priya Nair"}
-                </h2>
-                <p className="text-xs font-mono text-zinc-600 dark:text-zinc-400 font-semibold tracking-wide">
-                  {article.author_qualifications || "MBBS, MD (General Medicine), DM (Endocrinology)"}
-                </p>
-                <p className="text-sm font-sans text-teal-700 dark:text-teal-400 font-bold">
-                  {article.author_title || "Consultant Endocrinologist & Diabetologist"}
-                </p>
+          {/* Author Profile Banner */}
+          {(article.category === "Clinical Insights" || article.category === "Editorial" || article.author_name) && (() => {
+            const isNarayana = (article.author_name || "").toLowerCase().includes("narayana");
+            const fallbackName = isNarayana ? "Dr Narayana K" : "Dr. Priya Nair";
+            const fallbackQuals = isNarayana ? "MBBS, MD, DipIBLM, FHPE" : "MBBS, MD (General Medicine), DM (Endocrinology)";
+            const fallbackTitle = isNarayana ? "Chief Editor" : "Consultant Endocrinologist & Diabetologist";
+            const fallbackImage = isNarayana ? "/images/dr_narayana.jpg" : "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=400&q=80";
+
+            return (
+              <div className="p-6 mb-6 rounded-2xl bg-gradient-to-r from-teal-900/10 via-emerald-900/10 to-cyan-900/10 dark:from-teal-950/50 dark:via-emerald-950/50 dark:to-cyan-950/50 border border-teal-200/80 dark:border-teal-800/80 shadow-xs flex flex-col sm:flex-row items-center sm:items-start gap-5">
+                <img
+                  src={article.author_avatar_url || fallbackImage}
+                  alt={article.author_name || fallbackName}
+                  className="w-20 h-20 rounded-full object-cover border-3 border-teal-600 shadow-md shrink-0 bg-white"
+                />
+                <div className="space-y-1.5 text-center sm:text-left flex-1">
+                  <h2 className="text-lg font-extrabold text-zinc-900 dark:text-white">
+                    {article.author_name || fallbackName}
+                  </h2>
+                  <p className="text-xs font-mono text-zinc-600 dark:text-zinc-400 font-semibold tracking-wide">
+                    {article.author_qualifications || fallbackQuals}
+                  </p>
+                  <p className="text-sm font-sans text-teal-700 dark:text-teal-400 font-bold">
+                    {article.author_title || fallbackTitle}
+                  </p>
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Article Header Metadata */}
           <div>
@@ -799,7 +830,7 @@ export default function ArticleDetail({
             </div>
 
             {/* If no learning module exists yet */}
-            {!article.learningModule ? (
+            {!localLearningModule ? (
               <div className="p-6 text-center space-y-4">
                 <p className={`text-xs leading-relaxed font-sans ${pStyles.textMuted}`}>
                   Convert this clinical news article into interactive multiple-choice questions, flippable revision cards, and viva questions dynamically with AI Based!
@@ -847,7 +878,7 @@ export default function ArticleDetail({
                         <strong className="text-[10px] font-mono text-teal-600 dark:text-teal-400 block mb-1.5 uppercase tracking-wider">
                           One-Minute Rapid Revision:
                         </strong>
-                        <p>{article.learningModule.oneMinuteRevision}</p>
+                        <p>{localLearningModule.oneMinuteRevision}</p>
                       </div>
                     </div>
                   )}
@@ -855,7 +886,7 @@ export default function ArticleDetail({
                   {/* MCQs tab */}
                   {learningTab === "mcqs" && (
                     <div className="space-y-5">
-                      {article.learningModule.mcqs.map((q, qIdx) => {
+                      {localLearningModule.mcqs.map((q: any, qIdx: number) => {
                         const isAnswered = selectedAnswers[q.id] !== undefined;
                         const chosenIdx = selectedAnswers[q.id];
                         return (
@@ -866,7 +897,7 @@ export default function ArticleDetail({
                             </div>
                             <p className="font-semibold mb-3 font-sans">{q.question}</p>
                             <div className="space-y-2">
-                              {q.options.map((opt, oIdx) => {
+                              {q.options.map((opt: any, oIdx: number) => {
                                 const isCorrect = oIdx === q.correctAnswerIndex;
                                 const isChosen = oIdx === chosenIdx;
                                 let btnStyle = "border-zinc-200 hover:border-zinc-300 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-900";
@@ -913,7 +944,7 @@ export default function ArticleDetail({
                   {/* Flashcards tab */}
                   {learningTab === "flashcards" && (
                     <div className="space-y-4 text-center">
-                      {article.learningModule.flashcards.map(fc => (
+                      {localLearningModule.flashcards.map((fc: any) => (
                         <div
                           key={fc.id}
                           onClick={() => setFlippedCard(!flippedCard)}
@@ -938,7 +969,7 @@ export default function ArticleDetail({
                   {/* Viva tab */}
                   {learningTab === "viva" && (
                     <div className="space-y-4">
-                      {article.learningModule.vivaQuestions.map(vq => {
+                      {localLearningModule.vivaQuestions.map((vq: any) => {
                         const showAnswer = showVivaAnswer[vq.id];
                         return (
                           <div key={vq.id} className={`p-3 border rounded-lg ${pStyles.innerCard}`}>
@@ -961,7 +992,7 @@ export default function ArticleDetail({
                                 <div className="space-y-1">
                                   <strong className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider block">Key grading points:</strong>
                                   <ul className="list-disc list-inside space-y-0.5 text-[11px] font-sans pl-1">
-                                    {vq.keyPoints.map((kp, kIdx) => (
+                                    {vq.keyPoints.map((kp: any, kIdx: number) => (
                                       <li key={kIdx}>{kp}</li>
                                     ))}
                                   </ul>

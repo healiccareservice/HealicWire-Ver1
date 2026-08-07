@@ -343,7 +343,7 @@ async function startServer() {
   app.get("/api/articles", async (req, res) => {
     try {
       const { category, specialty, region, evidenceLevel, q, status } = req.query;
-      let query = supabaseAdmin.from('articles').select('*');
+      let query = supabaseAdmin.from('health_news').select('*');
 
       // Filter by status (default is published for public, or all if requested for admin)
       const targetStatus = status ? String(status) : "published";
@@ -400,14 +400,14 @@ async function startServer() {
     try {
       const { id } = req.params;
       
-      const { data, error } = await supabaseAdmin.from('articles').select('*').eq('id', id);
+      const { data, error } = await supabaseAdmin.from('health_news').select('*').eq('id', id);
       if (error) throw error;
       if (!data || data.length === 0) return res.status(404).json({ error: "Article not found" });
 
       const article = data[0];
       const newViews = (article.views || 0) + 1;
       
-      await supabaseAdmin.from('articles').update({ views: newViews }).eq('id', id);
+      await supabaseAdmin.from('health_news').update({ views: newViews }).eq('id', id);
       
       article.views = newViews;
       res.json(mapArticleFromDb(article));
@@ -422,27 +422,37 @@ async function startServer() {
     try {
       const { id } = req.params;
       
+      let redirectPath = '/';
+
       // Try to find the article in articles table first
-      let { data, error } = await supabaseAdmin.from('articles').select('*').eq('id', id).maybeSingle();
+      let { data, error } = await supabaseAdmin.from('health_news').select('*').eq('id', id).maybeSingle();
+      
+      if (data) {
+        if (data.category === 'Editorial') redirectPath = '/editorials';
+        else if (data.category === 'Clinical Insights') redirectPath = '/clinical-insights';
+      }
       
       // If not found, try editorials
       if (!data) {
         const resp = await supabaseAdmin.from('editorials').select('*').eq('id', id).maybeSingle();
         data = resp.data;
+        if (data) redirectPath = '/editorials';
       }
       
       // If not found, try clinical insights
       if (!data) {
         const resp = await supabaseAdmin.from('clinical_insights').select('*').eq('id', id).maybeSingle();
         data = resp.data;
+        if (data) redirectPath = '/clinical-insights';
       }
 
-      const frontendOrigin = req.headers.host?.includes('localhost') 
-        ? "http://localhost:5173"
+      const host = req.headers['x-forwarded-host'] || req.headers.host || '';
+      const frontendOrigin = (host.includes('localhost') || host.includes('127.0.0.1'))
+        ? `http://${host}`
         : "https://healicwire.com";
       
-      const fallbackUrl = `${frontendOrigin}/`;
-      const redirectUrl = `${frontendOrigin}/?article=${id}`;
+      const fallbackUrl = `${frontendOrigin}${redirectPath}`;
+      const redirectUrl = `${frontendOrigin}${redirectPath}?article=${id}`;
 
       if (error || !data) {
         return res.redirect(fallbackUrl);
@@ -478,7 +488,8 @@ async function startServer() {
       res.send(html);
     } catch (err: any) {
       console.error("Error generating share preview:", err);
-      const fallbackUrl = req.headers.host?.includes('localhost') ? "http://localhost:5173/" : "https://healicwire.com/";
+      const host = req.headers['x-forwarded-host'] || req.headers.host || '';
+      const fallbackUrl = (host.includes('localhost') || host.includes('127.0.0.1')) ? `http://${host}/` : "https://healicwire.com/";
       res.redirect(fallbackUrl);
     }
   });
@@ -524,7 +535,7 @@ async function startServer() {
         clinical_impact_score: req.body.clinicalImpactScore
       };
       
-      const { data, error } = await supabaseAdmin.from('articles').insert([payload]).select();
+      const { data, error } = await supabaseAdmin.from('health_news').insert([payload]).select();
       if (error) throw error;
       res.status(201).json(data[0]);
     } catch (err: any) {
@@ -572,7 +583,7 @@ async function startServer() {
       if (req.body.clinicalImpactScore !== undefined) updatePayload.clinical_impact_score = req.body.clinicalImpactScore;
       if (req.body.slug !== undefined) updatePayload.slug = req.body.slug;
       
-      const { data, error } = await supabaseAdmin.from('articles').update(updatePayload).eq('id', id).select();
+      const { data, error } = await supabaseAdmin.from('health_news').update(updatePayload).eq('id', id).select();
       if (error) throw error;
       if (!data || data.length === 0) return res.status(404).json({ error: "Article not found" });
       res.json(data[0]);
@@ -586,7 +597,7 @@ async function startServer() {
   app.delete("/api/admin/articles/:id", async (req, res) => {
     try {
       const { id } = req.params;
-      const { error } = await supabaseAdmin.from('articles').delete().eq('id', id);
+      const { error } = await supabaseAdmin.from('health_news').delete().eq('id', id);
       if (error) throw error;
       res.json({ success: true });
     } catch (err: any) {
@@ -1450,7 +1461,7 @@ async function startServer() {
           slug: `treatment-update-${selectedWeek.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
           source_url: "#"
         };
-        await supabaseAdmin.from('articles').insert([newArt]);
+        await supabaseAdmin.from('health_news').insert([newArt]);
       } else if (section === "Scientific Events") {
         const newEvtArt = {
           id: "evt-art-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4),
@@ -1473,7 +1484,7 @@ async function startServer() {
           slug: `scientific-events-${selectedWeek.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
           source_url: "#"
         };
-        await supabaseAdmin.from('articles').insert([newEvtArt]);
+        await supabaseAdmin.from('health_news').insert([newEvtArt]);
 
         const newEvt = {
           id: "evt-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4),
@@ -1517,7 +1528,7 @@ async function startServer() {
           slug: `pharma-${selectedWeek.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
           source_url: "#"
         };
-        await supabaseAdmin.from('articles').insert([newPharma]);
+        await supabaseAdmin.from('health_news').insert([newPharma]);
       } else if (section === "Hospital Intelligence") {
         const newAlert = {
           id: "alert-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4),
@@ -2153,7 +2164,7 @@ async function startServer() {
       };
 
       // Push to Supabase ingested queue
-      const { data, error } = await supabaseAdmin.from('articles').insert([payload]).select();
+      const { data, error } = await supabaseAdmin.from('health_news').insert([payload]).select();
       if (error) throw error;
 
       res.json({ success: true, article: data[0] });
@@ -2168,7 +2179,7 @@ async function startServer() {
     const { id } = req.params;
     const { question, history } = req.body;
 
-    const { data: articles, error } = await supabaseAdmin.from('articles').select('*').eq('id', id);
+    const { data: articles, error } = await supabaseAdmin.from('health_news').select('*').eq('id', id);
     if (error || !articles || articles.length === 0) {
       return res.status(404).json({ error: "Article not found" });
     }
@@ -2242,7 +2253,7 @@ async function startServer() {
   // 3. AI Claim Fact-Checker & Verifier
   app.post("/api/articles/:id/verify", requireAuth, async (req, res) => {
     const { id } = req.params;
-    const { data: articles, error } = await supabaseAdmin.from('articles').select('*').eq('id', id);
+    const { data: articles, error } = await supabaseAdmin.from('health_news').select('*').eq('id', id);
     if (error || !articles || articles.length === 0) {
       return res.status(404).json({ error: "Article not found" });
     }
@@ -2289,7 +2300,7 @@ async function startServer() {
       const claims = JSON.parse(_cleanJson3);
       
       // Save results to the article in DB for persistence
-      const { error: updateError } = await supabaseAdmin.from('articles').update({ fact_check_claims: claims }).eq('id', id);
+      const { error: updateError } = await supabaseAdmin.from('health_news').update({ fact_check_claims: claims }).eq('id', id);
       if (updateError) throw updateError;
 
       res.json(claims);
@@ -2302,7 +2313,7 @@ async function startServer() {
   // 4. News-To-Learning Dynamic Quiz Generator
   app.post("/api/articles/:id/quiz", requireAuth, async (req, res) => {
     const { id } = req.params;
-    const { data: articles, error } = await supabaseAdmin.from('articles').select('*').eq('id', id);
+    const { data: articles, error } = await supabaseAdmin.from('health_news').select('*').eq('id', id);
     if (error || !articles || articles.length === 0) {
       return res.status(404).json({ error: "Article not found" });
     }
@@ -2387,14 +2398,44 @@ async function startServer() {
       learningModule.flashcards = learningModule.flashcards.map((fc: any, i: number) => ({ ...fc, id: `fc-${Date.now()}-${i}` }));
       learningModule.vivaQuestions = learningModule.vivaQuestions.map((vq: any, i: number) => ({ ...vq, id: `vq-${Date.now()}-${i}` }));
 
-      // Save to DB
-      const { error: updateError } = await supabaseAdmin.from('articles').update({ learning_module: learningModule }).eq('id', id);
-      if (updateError) throw updateError;
+      const quizRecord = {
+        id: "quiz-" + Date.now(),
+        related_content_id: id,
+        title: "Quiz for " + article.headline,
+        description: article.summary_30s || "",
+        questions: learningModule.mcqs || [],
+        flashcards: learningModule.flashcards || [],
+        viva_questions: learningModule.vivaQuestions || [],
+        one_minute_revision: learningModule.oneMinuteRevision || ""
+      };
+      const { error: insertError } = await supabaseAdmin.from('quizzes').insert([quizRecord]);
+      if (insertError) throw insertError;
 
       res.json(learningModule);
     } catch (error: any) {
       console.error("Quiz generation failed:", error);
       res.status(500).json({ error: "Quiz generation failed", details: error.message });
+    }
+  });
+
+  // 5. Get Quiz by related content ID
+  app.get("/api/quizzes/:related_content_id", async (req, res) => {
+    try {
+      const { related_content_id } = req.params;
+      const { data, error } = await supabaseAdmin.from('quizzes').select('*').eq('related_content_id', related_content_id).order('created_at', { ascending: false }).limit(1).maybeSingle();
+      if (error) throw error;
+      if (!data) return res.status(404).json({ error: "Quiz not found" });
+
+      const learningModule = {
+        oneMinuteRevision: data.one_minute_revision,
+        mcqs: data.questions,
+        flashcards: data.flashcards,
+        vivaQuestions: data.viva_questions
+      };
+      res.json(learningModule);
+    } catch (error: any) {
+      console.error(error);
+      res.status(500).json({ error: error.message });
     }
   });
 

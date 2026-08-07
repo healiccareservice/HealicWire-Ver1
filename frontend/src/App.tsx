@@ -328,9 +328,15 @@ export default function App() {
     const articleId = searchParams.get('article');
     if (!articleId) return;
 
+    // Do not open ArticleDetail modal for Editorials or Clinical Insights pages.
+    // Let those pages handle expanding the article directly.
+    if (window.location.pathname.startsWith('/editorials') || window.location.pathname.startsWith('/clinical-insights')) {
+      return;
+    }
+
     try {
       // Try articles first
-      let { data, error } = await supabase.from('articles').select('*').eq('id', articleId).maybeSingle();
+      let { data, error } = await supabase.from('health_news').select('*').eq('id', articleId).maybeSingle();
       if (!data) {
         // Try editorials
         const edResp = await supabase.from('editorials').select('*').eq('id', articleId).maybeSingle();
@@ -355,7 +361,7 @@ export default function App() {
   const fetchArticles = async () => {
     try {
       const { data, error } = await supabase
-        .from('articles')
+        .from('health_news')
         .select('*')
         .eq('status', 'published')
         .order('published_at', { ascending: false });
@@ -397,7 +403,7 @@ export default function App() {
       if (!data || data.length === 0) {
         console.warn("Editorials table missing or empty, falling back to articles table for latest editorial");
         const { data: artData, error: artError } = await supabase
-          .from('articles')
+          .from('health_news')
           .select('*')
           .eq('category', 'Editorial')
           .eq('status', 'published')
@@ -471,7 +477,7 @@ export default function App() {
       if (!data || data.length === 0) {
         console.warn("Clinical insights table missing or empty, falling back to articles table");
         const { data: artData } = await supabase
-          .from('articles')
+          .from('health_news')
           .select('*')
           .eq('category', 'Clinical Insights')
           .eq('status', 'published')
@@ -542,7 +548,7 @@ export default function App() {
     if (!selectedArticle) return;
     try {
       const { data, error } = await supabase
-        .from('articles')
+        .from('health_news')
         .select('*')
         .eq('id', selectedArticle.id)
         .single();

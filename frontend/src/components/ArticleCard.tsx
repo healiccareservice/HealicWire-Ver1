@@ -60,7 +60,7 @@ export default function ArticleCard({
     e.stopPropagation();
     
     // Construct dynamic share URL targeting the backend OG generator
-    const origin = window.location.origin.includes('localhost') ? 'https://healicwire.in' : window.location.origin;
+    const origin = window.location.origin;
     const shareUrl = `${origin}/api/share/article/${article.id}`;
     
     try {

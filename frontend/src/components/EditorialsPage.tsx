@@ -32,23 +32,47 @@ export default function EditorialsPage({ onSelectArticle }: EditorialsPageProps)
   const [profiles, setProfiles] = useState<Record<string, any>>({});
 
   useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const articleId = searchParams.get('article');
+    if (articleId && editorials.length > 0) {
+      if (!expandedIds.includes(articleId)) {
+        setExpandedIds(prev => [...prev, articleId]);
+      }
+      setTimeout(() => {
+        const el = document.getElementById(`editorial-${articleId}`);
+        if (el) {
+          const y = el.getBoundingClientRect().top + window.scrollY - 100;
+          window.scrollTo({ top: y, behavior: 'smooth' });
+        }
+      }, 500);
+    }
+  }, [editorials]);
+
+  useEffect(() => {
     const fetchEditorials = async () => {
       try {
         const edRes = await supabase.from('editorials').select('*').eq('status', 'published').order('published_at', { ascending: false });
         
-        let finalData = edRes.data;
+        let finalData: any[] = edRes.data || [];
         if (edRes.error) {
           if (edRes.error.code === '42P01' || edRes.error.message.includes('does not exist')) {
-            console.warn("Editorials table missing, falling back to articles table");
-            const { data: artData, error: artError } = await supabase.from('articles').select('*').eq('category', 'Editorial').eq('status', 'published').order('published_at', { ascending: false });
-            if (artError) throw artError;
-            finalData = artData;
+            console.warn("Editorials table missing, falling back to health_news table");
           } else {
             throw edRes.error;
           }
         }
         
-        if (finalData) {
+        // Always fetch older editorials from health_news to ensure backward compatibility for shared links
+        const { data: artData, error: artError } = await supabase.from('health_news').select('*').eq('category', 'Editorial').eq('status', 'published');
+        
+        if (!artError && artData) {
+          const existingIds = new Set(finalData.map(d => d.id));
+          const oldEditorials = artData.filter(d => !existingIds.has(d.id));
+          finalData = [...finalData, ...oldEditorials];
+        }
+        
+        if (finalData && finalData.length > 0) {
+          finalData.sort((a, b) => new Date(b.published_at || b.created_at || 0).getTime() - new Date(a.published_at || a.created_at || 0).getTime());
           const mapped = finalData.map((e: any) => ({ ...mapArticleFromDB(e), isEditorial: true }));
           setEditorials(mapped);
         }
@@ -90,7 +114,7 @@ export default function EditorialsPage({ onSelectArticle }: EditorialsPageProps)
     e.stopPropagation();
     
     // Construct dynamic share URL targeting the backend OG generator
-    const origin = window.location.origin.includes('localhost') ? 'https://healicwire.in' : window.location.origin;
+    const origin = window.location.origin;
     const shareUrl = `${origin}/api/share/article/${article.id}`;
     
     // Only pass the URL and Title, allowing WhatsApp to natively generate a Link Preview
@@ -194,7 +218,7 @@ export default function EditorialsPage({ onSelectArticle }: EditorialsPageProps)
             };
 
             return (
-              <div key={ed.id} className="space-y-3">
+              <div key={ed.id} id={`editorial-${ed.id}`} className="space-y-3">
                 {/* Author Profile Banner - Placed above every article */}
                 <div className="p-6 rounded-2xl bg-gradient-to-r from-teal-900/10 via-emerald-900/10 to-cyan-900/10 dark:from-teal-950/50 dark:via-emerald-950/50 dark:to-cyan-950/50 border border-teal-200/80 dark:border-teal-800/80 shadow-xs flex flex-col sm:flex-row items-center sm:items-start gap-5">
                   {authorProfile.avatar_url ? (
