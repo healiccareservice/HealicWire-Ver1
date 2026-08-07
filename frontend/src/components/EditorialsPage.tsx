@@ -48,6 +48,18 @@ export default function EditorialsPage({ onSelectArticle }: EditorialsPageProps)
     }
   }, [editorials]);
 
+  // Sync URL with expanded editorials
+  useEffect(() => {
+    if (editorials.length > 0) {
+      if (expandedIds.length > 0) {
+        const lastExpanded = expandedIds[expandedIds.length - 1];
+        window.history.replaceState({}, document.title, window.location.pathname + '?article=' + lastExpanded);
+      } else {
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    }
+  }, [expandedIds, editorials.length]);
+
   useEffect(() => {
     const fetchEditorials = async () => {
       try {

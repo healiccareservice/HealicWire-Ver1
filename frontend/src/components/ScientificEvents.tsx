@@ -52,6 +52,18 @@ export default function ScientificEvents() {
   const [showDashboardModal, setShowDashboardModal] = useState(false);
   const [showAiRecommendModal, setShowAiRecommendModal] = useState(false);
 
+  // Deep-link sync for selectedEvent
+  useEffect(() => {
+    // Only update if we're done loading so we don't clear the URL prematurely
+    if (!loading) {
+      if (selectedEvent) {
+        window.history.replaceState({}, document.title, window.location.pathname + '?article=' + selectedEvent.id);
+      } else {
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    }
+  }, [selectedEvent, loading]);
+
   // Form & Registration State
   const [regName, setRegName] = useState("Dr. Ananya Sharma");
   const [regEmail, setRegEmail] = useState("ananya.sharma@healicwire.org");
@@ -93,6 +105,19 @@ export default function ScientificEvents() {
           const mapped = data.map(mapEventFromDB);
           setEvents(mapped);
           setPortalEvents(mapped);
+          
+          const searchParams = new URLSearchParams(window.location.search);
+          const articleId = searchParams.get('article');
+          if (articleId && mapped.some(e => e.id === articleId)) {
+            setSelectedEvent(mapped.find(e => e.id === articleId) || null);
+            setTimeout(() => {
+              const el = document.getElementById(`event-${articleId}`);
+              if (el) {
+                const y = el.getBoundingClientRect().top + window.scrollY - 100;
+                window.scrollTo({ top: y, behavior: 'smooth' });
+              }
+            }, 500);
+          }
         }
         setLoading(false);
       });
@@ -560,6 +585,7 @@ export default function ScientificEvents() {
             {spotlightEvents.slice(0, 2).map(pEvt => (
               <div
                 key={pEvt.id}
+                id={`event-${pEvt.id}`}
                 onClick={() => setSelectedEvent(pEvt)}
                 className="bg-white dark:bg-zinc-950 rounded-xl border border-purple-200/80 dark:border-purple-800/80 shadow-2xs hover:shadow-md transition-all flex flex-col overflow-hidden cursor-pointer"
               >

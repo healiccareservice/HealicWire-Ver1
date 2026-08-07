@@ -47,6 +47,18 @@ export default function ClinicalInsightsPage({ onSelectArticle }: ClinicalInsigh
     }
   }, [insights]);
 
+  // Sync URL with expanded insights
+  useEffect(() => {
+    if (insights.length > 0) {
+      if (expandedIds.length > 0) {
+        const lastExpanded = expandedIds[expandedIds.length - 1];
+        window.history.replaceState({}, document.title, window.location.pathname + '?article=' + lastExpanded);
+      } else {
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    }
+  }, [expandedIds, insights.length]);
+
   useEffect(() => {
     const fetchInsights = async () => {
       try {

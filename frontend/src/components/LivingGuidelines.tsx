@@ -35,7 +35,22 @@ export default function LivingGuidelines({
           const mapped = data.map(mapGuidelineFromDB);
           mapped.sort((a, b) => new Date(b.lastUpdated || 0).getTime() - new Date(a.lastUpdated || 0).getTime());
           setGuidelines(mapped);
-          if (mapped.length > 0) setExpandedId(mapped[0].id);
+          
+          const searchParams = new URLSearchParams(window.location.search);
+          const articleId = searchParams.get('article');
+          
+          if (articleId && mapped.some(g => g.id === articleId)) {
+            setExpandedId(articleId);
+            setTimeout(() => {
+              const el = document.getElementById(`guideline-${articleId}`);
+              if (el) {
+                const y = el.getBoundingClientRect().top + window.scrollY - 100;
+                window.scrollTo({ top: y, behavior: 'smooth' });
+              }
+            }, 500);
+          } else if (mapped.length > 0) {
+            setExpandedId(mapped[0].id);
+          }
         }
       } catch (err) {
         console.error("Error fetching guidelines:", err);
@@ -45,7 +60,19 @@ export default function LivingGuidelines({
     };
 
     fetchGuidelines();
-  }, [title]);
+  }, [title, tableName]);
+
+  // Sync expandedId with URL
+  useEffect(() => {
+    // Only update if we're done loading so we don't clear the URL prematurely
+    if (!loading) {
+      if (expandedId) {
+        window.history.replaceState({}, document.title, window.location.pathname + '?article=' + expandedId);
+      } else {
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    }
+  }, [expandedId, loading]);
 
   const filtered = guidelines.filter(g =>
     (g.condition || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -157,6 +184,7 @@ export default function LivingGuidelines({
             return (
               <div
                 key={g.id}
+                id={`guideline-${g.id}`}
                 className={`border rounded-xl overflow-hidden transition-all duration-200 ${
                   isExpanded
                     ? "border-teal-500/30 bg-teal-50/10 dark:border-teal-500/20 dark:bg-zinc-950"

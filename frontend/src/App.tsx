@@ -226,6 +226,15 @@ export default function App() {
   const [clinicalInsights, setClinicalInsights] = useState<Article[]>([]);
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
 
+  // Deep-link sync for selectedArticle
+  useEffect(() => {
+    if (selectedArticle) {
+      window.history.replaceState({}, document.title, window.location.pathname + '?article=' + selectedArticle.id);
+    } else {
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, [selectedArticle]);
+
   // Auto-slide Clinical Insights
   useEffect(() => {
     if (clinicalInsights.length === 0) return;
@@ -349,9 +358,16 @@ export default function App() {
       }
 
       if (data) {
-        // Need to clean up URL so it doesn't stay there if user closes the article
-        window.history.replaceState({}, document.title, window.location.pathname);
         setSelectedArticle(mapArticleFromDB(data));
+        
+        // Auto-scroll to the article's card in the background feed
+        setTimeout(() => {
+          const el = document.getElementById(`card-${data.id}`);
+          if (el) {
+            const y = el.getBoundingClientRect().top + window.scrollY - 100;
+            window.scrollTo({ top: y, behavior: 'smooth' });
+          }
+        }, 500);
       }
     } catch (err) {
       console.error("Failed to load initial article:", err);
