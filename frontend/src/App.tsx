@@ -227,10 +227,12 @@ export default function App() {
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
 
   // Deep-link sync for selectedArticle
+  const hasInitializedGlobalUrl = useRef(false);
   useEffect(() => {
     if (selectedArticle) {
+      hasInitializedGlobalUrl.current = true;
       window.history.replaceState({}, document.title, window.location.pathname + '?article=' + selectedArticle.id);
-    } else {
+    } else if (hasInitializedGlobalUrl.current) {
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, [selectedArticle]);
